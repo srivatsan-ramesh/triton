@@ -4,7 +4,6 @@
 #include "mlir/Pass/Pass.h"
 #include "triton/Analysis/Allocation.h"
 #include "triton/Analysis/Utility.h"
-#include "triton/Conversion/TritonGPUToLLVM/Patterns.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/IR/Attributes.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
@@ -30,18 +29,6 @@ struct DecomposeUnsupportedAMDConversions
     int sharedMemoryLimit = targetInfo.getSharedMemorySize();
 
     ModuleOp mod = getOperation();
-    int numCTAs = triton::gpu::TritonGPUDialect::getNumCTAs(mod);
-    int threadsPerWarp = triton::gpu::TritonGPUDialect::getThreadsPerWarp(mod);
-
-    auto shortcutFn = [](RankedTensorType srcTy, RankedTensorType dstTy) {
-      auto srcWmma =
-          dyn_cast<triton::gpu::AMDWmmaEncodingAttr>(srcTy.getEncoding());
-      auto dstDotOp =
-          dyn_cast<triton::gpu::DotOperandEncodingAttr>(dstTy.getEncoding());
-      return !cvtNeedsSharedMemory(srcTy, dstTy) && !(srcWmma && dstDotOp);
-    };
-
-    triton::gpu::decomposeTensorCoreToDotLayoutConversion(mod, shortcutFn);
 
     // Try to reduce LDS usage of cvt(mfma->blocked) op by changing the shape of
     // WarpsPerCta attribute in mfma layout. The implicit LDS usage of
@@ -121,8 +108,6 @@ struct DecomposeUnsupportedAMDConversions
       cvtOp.replaceAllUsesWith(replacementCvts.second.getResult());
       cvtOp.erase();
     });
-
-    triton::gpu::decomposeBlockedToDotLayoutConversion(mod);
   }
 };
 

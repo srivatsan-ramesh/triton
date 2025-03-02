@@ -1,5 +1,4 @@
 #include "triton/Analysis/Utility.h"
-#include "triton/Conversion/TritonGPUToLLVM/Patterns.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/IR/Attributes.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
