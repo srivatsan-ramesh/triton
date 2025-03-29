@@ -1,4 +1,4 @@
-// RUN: env ENABLE_LHS_TO_TMEM=1 triton-opt %s -split-input-file -tritongpu-promote-lhs-to-tmem | FileCheck %s
+// RUN:triton-opt %s -split-input-file -tritongpu-promote-lhs-to-tmem | FileCheck %s
 
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 32, transposed = false, elementBitWidth = 32}>
 #shared1 = #ttg.nvmma_shared<{swizzlingByteWidth = 32, transposed = true, elementBitWidth = 16}>
