@@ -3,11 +3,8 @@ import json
 import triton.profiler as proton
 import torch
 import triton_bench.swiglu
-import torch.distributed as dist
 
-import os
-
-from typing import Tuple
+import triton_bench.distributed as triton_dist
 
 from triton_bench.numerics_details.mxfp import downcast_to_mxfp
 from triton_bench.matmul_ogs import MicroscalingCtx, matmul_ogs, PrecisionConfig, FlexCtx
@@ -77,7 +74,7 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
               TP=1, EP=1, name=""):
     assert n_expts_tot % EP == 0
     assert dim2 % TP == 0
-    local_rank, world_size = setup_distributed()
+    local_rank, world_size = triton_dist.setup()
     dev = f"cuda:{local_rank}"
 
     # input
@@ -154,13 +151,6 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
         print(f"Utilization: {util:.0%}; {tflops:>6.1f} TFLOPs, {tbps:.1f} TB/s")
 
     return util, tflops, tbps
-
-
-def setup_distributed() -> Tuple[int, int]:
-    dist.init_process_group(backend="nccl")
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    torch.cuda.set_device(local_rank)
-    return local_rank, dist.get_world_size()
 
 
 if __name__ == "__main__":
