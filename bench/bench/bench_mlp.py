@@ -3,6 +3,12 @@ import json
 import triton.profiler as proton
 import torch
 import triton_bench.swiglu
+import torch.distributed as dist
+
+import os
+
+from typing import Tuple
+
 from triton_bench.numerics_details.mxfp import downcast_to_mxfp
 from triton_bench.matmul_ogs import MicroscalingCtx, matmul_ogs, PrecisionConfig, FlexCtx
 from triton_bench.numerics import InFlexData
@@ -71,7 +77,8 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
               TP=1, EP=1, name=""):
     assert n_expts_tot % EP == 0
     assert dim2 % TP == 0
-    dev = "cuda"
+    local_rank, world_size = setup_distributed()
+    dev = f"cuda:{local_rank}"
 
     # input
     # weights
@@ -96,7 +103,8 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
     pc2 = PrecisionConfig(mx_ctx=w2_mx, flex_ctx=FlexCtx(rhs_data=w2_flex))
 
     # -- benchmark --
-    fpath = Path(f"logs/{name}/{batch}-{dim1}-{dim2}-{n_expts_tot}-{n_expts_act}-{x_dtype}-{w_dtype}.hatchet")
+    fpath = Path(
+        f"logs/{name}/{batch}-{dim1}-{dim2}-{n_expts_tot}-{n_expts_act}-{x_dtype}-{w_dtype}.hatchet.rank{local_rank}")
     fpath.parent.mkdir(parents=True, exist_ok=True)
     x_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp8": torch.float8_e4m3fn}[x_dtype]
     # special treatment of fp8_e4m3 on AMD CDNA3 because it uses fp8_e4m3fnuz
@@ -146,6 +154,13 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
         print(f"Utilization: {util:.0%}; {tflops:>6.1f} TFLOPs, {tbps:.1f} TB/s")
 
     return util, tflops, tbps
+
+
+def setup_distributed() -> Tuple[int, int]:
+    dist.init_process_group(backend="nccl")
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    torch.cuda.set_device(local_rank)
+    return local_rank, dist.get_world_size()
 
 
 if __name__ == "__main__":
