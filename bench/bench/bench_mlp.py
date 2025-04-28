@@ -71,11 +71,14 @@ def quantize(w, dtype, dev, **opt):
 
 def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
               # tensor / expert parallelism
-              TP=1, EP=1, name=""):
-    assert n_expts_tot % EP == 0
-    assert dim2 % TP == 0
+              TP=1, name=""):
     local_rank, world_size = triton_dist.setup()
     dev = f"cuda:{local_rank}"
+    EP = world_size // TP
+
+    assert n_expts_tot % EP == 0, f"{n_expts_tot=}, {EP=}, n_expts_tot must be divisible by EP"
+    assert dim2 % TP == 0, f"{dim2=}, {TP=}, dim2 must be divisible by TP"
+    assert EP * TP == world_size, f"{EP=}, {TP=}, {world_size=}, EP * TP must be equal to world size"
 
     # input
     # weights
@@ -158,16 +161,18 @@ if __name__ == "__main__":
     if SPECS is None:
         print("Current GPU has no specs provided, utilization is N/A")
     if has_native_mx4:
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, EP=1, name="dense")
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "mx4", TP=1, EP=1, name="dense")
-        bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, EP=1, name="llama4")
-        bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "mx4", TP=4, EP=1, name="llama4")
+        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
+        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "mx4", TP=1, name="dense")
+        if torch.cuda.device_count() > 1:
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4")
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "mx4", TP=4, name="llama4")
     else:
         # bf16/fp16 x fp8 is skipped because matmul_ogs requires x and w has the
         # same type when not doing mxfp operation
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, EP=1, name="dense")
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp16", "mx4", TP=1, EP=1, name="dense")
-        bench_mlp(8192, 8192, 8192, 1, 1, "bf16", "mx4", TP=1, EP=1, name="dense")
-        bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, EP=1, name="llama4")
-        bench_mlp(2048, 5120, 8192, 128, 4, "bf16", "mx4", TP=4, EP=1, name="llama4")
-        bench_mlp(2048, 5120, 8192, 128, 4, "fp16", "mx4", TP=4, EP=1, name="llama4")
+        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
+        bench_mlp(8192, 8192, 8192, 1, 1, "fp16", "mx4", TP=1, name="dense")
+        bench_mlp(8192, 8192, 8192, 1, 1, "bf16", "mx4", TP=1, name="dense")
+        if torch.cuda.device_count() > 1:
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4")
+            bench_mlp(2048, 5120, 8192, 128, 4, "bf16", "mx4", TP=4, name="llama4")
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp16", "mx4", TP=4, name="llama4")
