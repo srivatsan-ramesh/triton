@@ -20,3 +20,12 @@ def setup() -> Tuple[int, int]:
     if torch.cuda.is_available():
         torch.cuda.set_device(local_rank)
     return local_rank, world_size
+
+
+def torch_all_gather(x, dim):
+    if _is_distributed_launch():
+        bufs = [torch.empty_like(x) for _ in range(dist.get_world_size())]
+        dist.all_gather(bufs, x)
+        return torch.cat(bufs, dim=dim)
+    else:
+        return x

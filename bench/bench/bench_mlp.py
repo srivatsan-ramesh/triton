@@ -75,6 +75,7 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
     local_rank, world_size = triton_dist.setup()
     dev = f"cuda:{local_rank}"
     EP = world_size // TP
+    DP = world_size
 
     assert n_expts_tot % EP == 0, f"{n_expts_tot=}, {EP=}, n_expts_tot must be divisible by EP"
     assert dim2 % TP == 0, f"{dim2=}, {TP=}, dim2 must be divisible by TP"
@@ -111,11 +112,13 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
     if x_dtype == torch.float8_e4m3fn and get_cdna_version() == 3:
         x_dtype = torch.float8_e4m3fnuz
 
-    x = torch.randn((batch, dim1), device=dev)
+    x = torch.randn((batch // DP, dim1), device=dev)
     xg = x.to(wg.dtype if n_expts_tot > 1 else x_dtype)
     x = x.to(x_dtype)
     # run layer
     proton.start(str(fpath.with_suffix('')), hook="triton")
+    x = triton_dist.torch_all_gather(x, dim=0)
+    xg = triton_dist.torch_all_gather(xg, dim=0)
     for i in range(100):
         if n_expts_tot > 1:
             logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
