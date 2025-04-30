@@ -45,7 +45,7 @@ def torch_reduce_scatter(x, dim=0):
         shape[dim] //= world_size
         out = x.new_empty(shape)
         # reduce scatter into the single tensor
-        dist.reduce_scatter_tensor(out, x_list)
+        dist.reduce_scatter(out, x_list)
         return out
     else:
         return x
