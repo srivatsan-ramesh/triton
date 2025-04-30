@@ -43,11 +43,13 @@ def torch_reduce_scatter(x, dim=0):
         # build output shape
         shape = list(x.shape)
         shape[dim] //= world_size
-        out = x.new_empty(shape)
         # reduce scatter into the single tensor
         # check if dtype is fp8, then convert it to float16 before reducing
         if x.dtype not in [torch.float16, torch.bfloat16, torch.float32]:
             x_list = [x.to(torch.float16) for x in x_list] 
+            out = x.new_empty(shape, dtype=torch.float16)
+        else:
+            out = x.new_empty(shape, dtype=x.dtype)
         dist.reduce_scatter(out, x_list)
         return out
     else:
