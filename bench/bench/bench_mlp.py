@@ -164,18 +164,20 @@ if __name__ == "__main__":
     if SPECS is None:
         print("Current GPU has no specs provided, utilization is N/A")
     if has_native_mx4:
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "mx4", TP=1, name="dense")
         if torch.cuda.device_count() > 1:
             bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4")
             bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "mx4", TP=4, name="llama4")
+        else:
+            bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
+            bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "mx4", TP=1, name="dense")
     else:
         # bf16/fp16 x fp8 is skipped because matmul_ogs requires x and w has the
         # same type when not doing mxfp operation
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
-        bench_mlp(8192, 8192, 8192, 1, 1, "fp16", "mx4", TP=1, name="dense")
-        bench_mlp(8192, 8192, 8192, 1, 1, "bf16", "mx4", TP=1, name="dense")
         if torch.cuda.device_count() > 1:
             bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4")
             bench_mlp(2048, 5120, 8192, 128, 4, "bf16", "mx4", TP=4, name="llama4")
             bench_mlp(2048, 5120, 8192, 128, 4, "fp16", "mx4", TP=4, name="llama4")
+        else:
+            bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
+            bench_mlp(8192, 8192, 8192, 1, 1, "fp16", "mx4", TP=1, name="dense")
+            bench_mlp(8192, 8192, 8192, 1, 1, "bf16", "mx4", TP=1, name="dense")
