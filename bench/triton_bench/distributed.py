@@ -22,10 +22,30 @@ def setup() -> Tuple[int, int]:
     return local_rank, world_size
 
 
-def torch_all_gather(x, dim):
+def torch_all_gather(x, dim=0):
     if _is_distributed_launch():
-        bufs = [torch.empty_like(x) for _ in range(dist.get_world_size())]
-        dist.all_gather(bufs, x)
-        return torch.cat(bufs, dim=dim)
+        world_size = dist.get_world_size()
+        # build output shape
+        shape = list(x.shape)
+        shape[dim] *= world_size
+        out = x.new_empty(shape)
+        # gather into the single tensor
+        dist.all_gather_into_tensor(out, x)
+        return out
+    else:
+        return x
+
+
+def torch_reduce_scatter(x, dim=0):
+    if _is_distributed_launch():
+        world_size = dist.get_world_size()
+        x_list = list(x.chunk(world_size, dim=dim))
+        # build output shape
+        shape = list(x.shape)
+        shape[dim] //= world_size
+        out = x.new_empty(shape)
+        # reduce scatter into the single tensor
+        dist.reduce_scatter_tensor(out, x_list)
+        return out
     else:
         return x
