@@ -153,7 +153,7 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
         tflops = sum([tot_flops[w] for w in [8, 16]]) / tot_time * 1e-3
         tbps = tot_bytes / tot_time * 1e-3
         print(f"{batch=}, {dim1=}, {dim2=}, {n_expts_tot=}, {n_expts_act=}, "
-              f"{x_dtype=}, {w_dtype=}, {TP=}, {util:.2%}, "
+              f"{x_dtype=}, {w_dtype=}, {TP=}, UTILS={util:.2%}, "
               f"{tflops:.1f} TFLOPs, {tbps:.1f} TB/s")
 
     return util, tflops, tbps
