@@ -95,7 +95,7 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         if EP > 1:
             # keep only the experts assigned to this rank
             chunk = n_expts_tot // EP
-            local_expt_mask = (expt_indx // chunk) == dist.get_rank()
+            local_expt_mask = (expt_indx // chunk) == dist.get_rank() % EP
             expt_scal = expt_scal[local_expt_mask]
             expt_indx = expt_indx[local_expt_mask]
         else:
