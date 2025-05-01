@@ -1,7 +1,8 @@
 import os
 import torch
 import torch.distributed as dist
-from triton_bench.routing import RoutingData, GatherIndx, ScatterIndx, routing_torch
+import triton_bench.routing
+from triton_bench.routing import RoutingData, GatherIndx, ScatterIndx
 from typing import Tuple
 
 
@@ -57,9 +58,10 @@ def reduce_scatter(x: torch.Tensor, dim=0):
         return x
 
 
-def routing(logits, n_expts_act, expt_indx=None):
+def routing(logits, n_expts_act, expt_indx=None, EP=1):
     if _is_distributed_launch():
         assert expt_indx is None
+        assert EP == 1, "Distributed routing does not support ep"
 
         def topk(vals, k, expt_indx):
             # topk of experts
@@ -92,4 +94,4 @@ def routing(logits, n_expts_act, expt_indx=None):
         scatter_indx = ScatterIndx(src_indx=gate_indx.int(), dst_indx=topk_indx.int())
         return RoutingData(gate_scal, hist, n_expts_tot, n_expts_act), gather_indx, scatter_indx
     else:
-        return routing_torch(logits, n_expts_act, expt_indx)
+        return triton_bench.routing(logits, n_expts_act, expt_indx, EP)
