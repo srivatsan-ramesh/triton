@@ -97,7 +97,7 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         expt_min = n_expts_tot // EP * rank
         expt_max = n_expts_tot // EP * (rank + 1)
         local_expt_mask = (expt_indx < expt_max) & (expt_indx >= expt_min)
-        gate_scal = expt_scal[local_expt_mask]
+        expt_scal = expt_scal[local_expt_mask]
         expt_indx = expt_indx[local_expt_mask]
         # sort by expert_id so experts are contiguous for the matmul
         # For example:
@@ -105,6 +105,7 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         # topk_indx: [2 (row0), 1 (row1), 3 (row2), 4 (row3), 5 (row4), ...]
         topk_indx = torch.argsort(expt_indx, stable=True)
         gate_indx = torch.argsort(topk_indx)
+        gate_scal = expt_scal[topk_indx]
         hist = torch.histc(expt_indx, bins=n_expts_tot // EP,
                            max=n_expts_tot // EP - 1)  # histogram of tokens over experts
         # pack the matmul data structure
