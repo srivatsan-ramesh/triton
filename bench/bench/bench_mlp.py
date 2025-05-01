@@ -116,18 +116,18 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
     x = x.to(x_dtype)
     # run layer
     proton.start(str(fpath.with_suffix('')), hook="triton")
-    x = triton_dist.torch_all_gather(x, dim=0)
+    x = triton_dist.all_gather(x, dim=0)
     xg = x.to(wg.dtype if n_expts_tot > 1 else x_dtype)
     for i in range(100):
         if n_expts_tot > 1:
             logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
-            rdata, gather_indx, scatter_indx = routing(logits, n_expts_act, simulated_ep=EP)
+            rdata, gather_indx, scatter_indx = triton_dist.routing_torch(logits, n_expts_act, simulated_ep=EP)
         else:
             rdata, gather_indx, scatter_indx = None, None, None
         x = matmul_ogs(x, w1, b1, rdata, gather_indx=gather_indx, precision_config=pc1)
         x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
         x = matmul_ogs(x, w2, b2, rdata, scatter_indx=scatter_indx, precision_config=pc2)
-    x = triton_dist.torch_reduce_scatter(x, dim=0) 
+    x = triton_dist.reduce_scatter(x, dim=0)
     proton.finalize()
 
     # -- analyze --
