@@ -68,7 +68,6 @@ def reduce_scatter(x: torch.Tensor, local_expt_masks: torch.Tensor = None, dim=0
 
 def routing(logits, n_expts_act, expt_indx=None, EP=1):
     if _is_distributed_launch():
-        assert EP == 1, "Distributed routing does not support ep"
 
         def topk(vals, k, expt_indx):
             # topk of experts
