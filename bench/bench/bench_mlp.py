@@ -119,7 +119,7 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
     for i in range(100):
         if n_expts_tot > 1:
             logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
-            rdata, gather_indx, scatter_indx = triton_dist.routing(logits, n_expts_act, simulated_ep=EP)
+            rdata, gather_indx, scatter_indx = triton_dist.routing(logits, n_expts_act, EP=EP)
         else:
             rdata, gather_indx, scatter_indx = None, None, None
         x = matmul_ogs(x, w1, b1, rdata, gather_indx=gather_indx, precision_config=pc1)
