@@ -92,12 +92,11 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         expt_scal = expt_scal.reshape(-1)
         expt_indx = expt_indx.reshape(-1).to(torch.int32)
         # Distributed-EP
-        sorted_expt_indx = torch.argsort(expt_indx, stable=True)
         # Get my own rank in distributed world
         rank = dist.get_rank()
         expt_min = n_expts_tot // EP * rank
         expt_max = n_expts_tot // EP * (rank + 1)
-        local_expt_mask = (sorted_expt_indx < expt_max) & (sorted_expt_indx >= expt_min)
+        local_expt_mask = (expt_indx < expt_max) & (expt_indx >= expt_min)
         gate_scal = expt_scal[local_expt_mask]
         expt_indx = expt_indx[local_expt_mask]
         # sort by expert_id so experts are contiguous for the matmul
