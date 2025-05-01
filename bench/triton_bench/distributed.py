@@ -78,12 +78,12 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         # Sort each token's selections by expert
         expt_indx, sort_indices = torch.sort(expt_indx, dim=1)
         expt_scal = torch.gather(expt_scal, 1, sort_indices)
-        expt_scal = expt_scal.reshape(-1)
-        expt_indx = expt_indx.reshape(-1).to(torch.int32)
         # Distributed
         expt_scal = all_gather(expt_scal, dim=0)
         expt_indx = all_gather(expt_indx, dim=0)
         # flatten topk data
+        expt_scal = expt_scal.reshape(-1)
+        expt_indx = expt_indx.reshape(-1).to(torch.int32)
         # sort by expert_id so experts are contiguous for the matmul
         topk_indx = torch.argsort(expt_indx, stable=True)
         gate_indx = torch.argsort(topk_indx)

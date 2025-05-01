@@ -114,8 +114,8 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
     x = x.to(x_dtype)
     # run layer
     proton.start(str(fpath.with_suffix('')), hook="triton")
-    x = triton_dist.all_gather(x, dim=0)
     xg = x.to(wg.dtype if n_expts_tot > 1 else x_dtype)
+    x = triton_dist.all_gather(x, dim=0)
     for i in range(100):
         if n_expts_tot > 1:
             logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
