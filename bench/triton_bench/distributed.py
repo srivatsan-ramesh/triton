@@ -47,9 +47,9 @@ def reduce_scatter(x: torch.Tensor, local_expt_masks: torch.Tensor = None, dim=0
             shape = list(x.shape)
             shape[dim] = mask.shape[dim]
             # create a zero tensor, scatter x into it where mask is True, then split
-            x_list = x.new_zeros(shape).masked_scatter_(mask, x).chunk(world_size, dim=dim)
+            x_list = list(x.new_zeros(shape).masked_scatter_(mask, x).chunk(world_size, dim=dim))
         else:
-            x_list = x.chunk(world_size, dim=dim)
+            x_list = list(x.chunk(world_size, dim=dim))
         # build output shape
         shape = list(x.shape)
         shape[dim] //= world_size
@@ -93,12 +93,14 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         expt_indx = expt_indx.reshape(-1).to(torch.int32)
         # Distributed-EP
         # Get my own rank in distributed world
-        rank = dist.get_rank()
-        expt_min = n_expts_tot // EP * rank
-        expt_max = n_expts_tot // EP * (rank + 1)
-        local_expt_mask = (expt_indx < expt_max) & (expt_indx >= expt_min)
-        expt_scal = expt_scal[local_expt_mask]
-        expt_indx = expt_indx[local_expt_mask]
+        if EP > 1:
+            # keep only the experts assigned to this rank
+            chunk = n_expts_tot // EP
+            local_expt_mask = (expt_indx // chunk) == dist.get_rank()
+            expt_scal = expt_scal[local_expt_mask]
+            expt_indx = expt_indx[local_expt_mask]
+        else:
+            local_expt_mask = None
         # sort by expert_id so experts are contiguous for the matmul
         # For example:
         # expt_indx: [expt0 => row4, row1, row0, ..., expt1 => row2, row3, ..., ...]
