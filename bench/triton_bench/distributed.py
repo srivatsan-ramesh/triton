@@ -38,10 +38,18 @@ def all_gather(x: torch.Tensor, dim=0):
         return x
 
 
-def reduce_scatter(x: torch.Tensor, dim=0):
+def reduce_scatter(x: torch.Tensor, local_expt_masks: torch.Tensor = None, dim=0):
     if _is_distributed_launch():
         world_size = dist.get_world_size()
-        x_list = list(x.chunk(world_size, dim=dim))
+        if local_expt_masks is not None:
+            mask = local_expt_masks
+            # build the padded shape
+            shape = list(x.shape)
+            shape[dim] = mask.shape[dim]
+            # create a zero tensor, scatter x into it where mask is True, then split
+            x_list = x.new_zeros(shape).masked_scatter_(mask, x).chunk(world_size, dim=dim)
+        else:
+            x_list = x.chunk(world_size, dim=dim)
         # build output shape
         shape = list(x.shape)
         shape[dim] //= world_size
@@ -60,7 +68,6 @@ def reduce_scatter(x: torch.Tensor, dim=0):
 
 def routing(logits, n_expts_act, expt_indx=None, EP=1):
     if _is_distributed_launch():
-        assert expt_indx is None
         assert EP == 1, "Distributed routing does not support ep"
 
         def topk(vals, k, expt_indx):
@@ -78,20 +85,32 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         # Sort each token's selections by expert
         expt_indx, sort_indices = torch.sort(expt_indx, dim=1)
         expt_scal = torch.gather(expt_scal, 1, sort_indices)
-        # Distributed
+        # Distributed-DP
         expt_scal = all_gather(expt_scal, dim=0)
         expt_indx = all_gather(expt_indx, dim=0)
         # flatten topk data
         expt_scal = expt_scal.reshape(-1)
         expt_indx = expt_indx.reshape(-1).to(torch.int32)
+        # Distributed-EP
+        sorted_expt_indx = torch.argsort(expt_indx, stable=True)
+        # Get my own rank in distributed world
+        rank = dist.get_rank()
+        expt_min = n_expts_tot // EP * rank
+        expt_max = n_expts_tot // EP * (rank + 1)
+        local_expt_mask = (sorted_expt_indx < expt_max) & (sorted_expt_indx >= expt_min)
+        gate_scal = expt_scal[local_expt_mask]
+        expt_indx = expt_indx[local_expt_mask]
         # sort by expert_id so experts are contiguous for the matmul
+        # For example:
+        # expt_indx: [expt0 => row4, row1, row0, ..., expt1 => row2, row3, ..., ...]
+        # topk_indx: [2 (row0), 1 (row1), 3 (row2), 4 (row3), 5 (row4), ...]
         topk_indx = torch.argsort(expt_indx, stable=True)
         gate_indx = torch.argsort(topk_indx)
-        gate_scal = expt_scal[topk_indx]
-        hist = torch.histc(expt_indx, bins=n_expts_tot, max=n_expts_tot - 1)  # histogram of tokens over experts
+        hist = torch.histc(expt_indx, bins=n_expts_tot // EP,
+                           max=n_expts_tot // EP - 1)  # histogram of tokens over experts
         # pack the matmul data structure
         gather_indx = GatherIndx(src_indx=topk_indx.int(), dst_indx=gate_indx.int())
         scatter_indx = ScatterIndx(src_indx=gate_indx.int(), dst_indx=topk_indx.int())
-        return RoutingData(gate_scal, hist, n_expts_tot, n_expts_act), gather_indx, scatter_indx
+        return RoutingData(gate_scal, hist, n_expts_tot // EP, n_expts_act), gather_indx, scatter_indx, local_expt_mask
     else:
-        return triton_bench.routing(logits, n_expts_act, expt_indx, EP)
+        return triton_bench.routing.routing(logits, n_expts_act, expt_indx, EP), None
