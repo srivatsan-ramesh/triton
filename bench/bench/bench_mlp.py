@@ -71,9 +71,8 @@ def quantize(w, dtype, dev, **opt):
 
 def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
               # tensor / expert parallelism
-              TP=1, name=""):
-    local_rank, world_size = triton_dist.setup()
-    dev = f"cuda:{local_rank}"
+              TP=1, name="", rank=0, world_size=1):
+    dev = f"cuda:{rank}"
     EP = world_size // TP
     DP = world_size
 
@@ -104,8 +103,7 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
     pc2 = PrecisionConfig(mx_ctx=w2_mx, flex_ctx=FlexCtx(rhs_data=w2_flex))
 
     # -- benchmark --
-    fpath = Path(
-        f"logs/{name}/{local_rank}/{batch}-{dim1}-{dim2}-{n_expts_tot}-{n_expts_act}-{x_dtype}-{w_dtype}.hatchet")
+    fpath = Path(f"logs/{name}/{rank}/{batch}-{dim1}-{dim2}-{n_expts_tot}-{n_expts_act}-{x_dtype}-{w_dtype}.hatchet")
     fpath.parent.mkdir(parents=True, exist_ok=True)
     x_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp8": torch.float8_e4m3fn}[x_dtype]
     # special treatment of fp8_e4m3 on AMD CDNA3 because it uses fp8_e4m3fnuz
@@ -163,22 +161,23 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype,
 
 if __name__ == "__main__":
     has_native_mx4 = torch.cuda.get_device_capability(0)[0] >= 10 or get_cdna_version() == 4
+    rank, world_size = triton_dist.setup()
     if SPECS is None:
         print("Current GPU has no specs provided, utilization is N/A")
     if has_native_mx4:
-        if torch.cuda.device_count() > 1:
-            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4")
-            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "mx4", TP=4, name="llama4")
+        if world_size > 1:
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4", rank=rank, world_size=world_size)
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "mx4", TP=4, name="llama4", rank=rank, world_size=world_size)
         else:
             bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
             bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "mx4", TP=1, name="dense")
     else:
         # bf16/fp16 x fp8 is skipped because matmul_ogs requires x and w has the
         # same type when not doing mxfp operation
-        if torch.cuda.device_count() > 1:
-            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4")
-            bench_mlp(2048, 5120, 8192, 128, 4, "bf16", "mx4", TP=4, name="llama4")
-            bench_mlp(2048, 5120, 8192, 128, 4, "fp16", "mx4", TP=4, name="llama4")
+        if world_size > 1:
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp8", "fp8", TP=4, name="llama4", rank=rank, world_size=world_size)
+            bench_mlp(2048, 5120, 8192, 128, 4, "bf16", "mx4", TP=4, name="llama4", rank=rank, world_size=world_size)
+            bench_mlp(2048, 5120, 8192, 128, 4, "fp16", "mx4", TP=4, name="llama4", rank=rank, world_size=world_size)
         else:
             bench_mlp(8192, 8192, 8192, 1, 1, "fp8", "fp8", TP=1, name="dense")
             bench_mlp(8192, 8192, 8192, 1, 1, "fp16", "mx4", TP=1, name="dense")
