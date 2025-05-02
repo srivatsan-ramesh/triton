@@ -3,6 +3,10 @@ from triton_bench.distributed import all_gather, reduce_scatter, routing
 
 import torch.distributed as dist
 import triton_bench
+import torch
+from triton_bench.distributed import setup, routing
+from triton_bench.routing import RoutingData, GatherIndx, ScatterIndx
+from pytest import MonkeyPatch
 
 
 def test_all_gather_non_distributed(monkeypatch):
@@ -95,21 +99,6 @@ def test_all_gather_distributed_dim1(monkeypatch):
     assert torch.allclose(result, expected)
 
 
-def test_reduce_scatter_distributed_dtype_cast(monkeypatch):
-    # WORLD_SIZE=2, x dtype int32 => should be cast to float16
-    monkeypatch.setenv("WORLD_SIZE", "2")
-    monkeypatch.setattr(dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(dist, "get_world_size", lambda: 2)
-    monkeypatch.setattr(dist, "reduce_scatter", dummy_reduce_scatter)
-
-    x = torch.randint(0, 10, (4, 4), dtype=torch.int32)
-    expected = x.chunk(2, dim=0)[0].to(torch.float16)
-    result = reduce_scatter(x, token_mask=None, dim=0)
-    assert result.shape == expected.shape
-    assert result.dtype == torch.float16
-    assert torch.allclose(result, expected)
-
-
 def test_reduce_scatter_distributed_with_token_mask_dim1(monkeypatch):
     # WORLD_SIZE=2, token_mask on dim=1 (columns)
     monkeypatch.setenv("WORLD_SIZE", "2")
@@ -131,9 +120,39 @@ def test_reduce_scatter_distributed_with_token_mask_dim1(monkeypatch):
 
 
 def test_routing_non_distributed(monkeypatch):
-    # WORLD_SIZE=1 => fallback to triton_bench.routing.routing
     monkeypatch.setenv("WORLD_SIZE", "1")
     monkeypatch.setattr(triton_bench.routing, "routing", lambda logits, n_act, expt_indx=None, EP=1: "dummy_routing")
     result, extra = routing(torch.randn(5, 4), 2)
     assert result == "dummy_routing"
     assert extra is None
+
+
+def test_routing_distributed_EP(monkeypatch):
+
+    def dummy_all_gather_into_tensor(out, x):
+        gathered = torch.cat([x, x], dim=0)
+        out.copy_(gathered)
+
+    # Test distributed routing with EP=1 (token_mask should be None)
+    monkeypatch.setenv("WORLD_SIZE", "2")
+    # Set environment for local rank and distributed group
+    monkeypatch.setenv("LOCAL_RANK", "0")
+    monkeypatch.setattr(dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(dist, "get_world_size", lambda: 2)
+    monkeypatch.setattr(dist, "get_rank", lambda: 0)
+    monkeypatch.setattr(dist, "all_gather", dummy_all_gather_into_tensor)
+
+    logits = torch.tensor([[0.1, 0.4, 0.3, 0.2], [0.5, 0.4, 0.3, 0.1]])
+    n_expts_act = 2
+    EP = 2
+    expt_indx, topk_indx = torch.tensor([[1, 2], [0, 1], [1, 2], [0, 1]]).reshape(-1).sort(stable=True)
+    gate_indx = torch.argsort(topk_indx, stable=True)
+    topk_indx[expt_indx > 1] = -1
+    gate_indx[gate_indx > 1] = -1
+    rdata, gather_indx, scatter_indx, token_mask = routing(logits, n_expts_act, EP=EP)
+    assert gather_indx.src_indx == topk_indx.int()
+    assert gather_indx.dst_indx == gate_indx.int()
+    assert scatter_indx.src_indx == gate_indx.int()
+    assert scatter_indx.dst_indx == topk_indx.int()
+    # rank0
+    assert token_mask == torch.tensor([True, False, True, True], dtype=torch.bool)

@@ -96,7 +96,7 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
             token_mask = torch.any(local_expt_mask, dim=1)
             expt_scal, expt_indx, local_expt_mask = [t[token_mask] for t in (expt_scal, expt_indx, local_expt_mask)]
             expt_scal = expt_scal.masked_fill(~local_expt_mask, 0)
-            expt_indx = expt_indx.masked_fill(~local_expt_mask, -1)
+            expt_indx = expt_indx.masked_fill(~local_expt_mask, n_expts_tot + 1)
         else:
             token_mask = None
         # flatten topk data
@@ -106,8 +106,11 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         # For example:
         # expt_indx: [expt0 => row4, row1, row0, ..., expt1 => row2, row3, ..., ...]
         # topk_indx: [2 (row0), 1 (row1), 3 (row2), 4 (row3), 5 (row4), ...]
-        topk_indx = torch.argsort(expt_indx, stable=True)
+        expt_indx, topk_indx = torch.sort(expt_indx, stable=True)
         gate_indx = torch.argsort(topk_indx)
+        topk_indx[expt_indx == n_expts_tot + 1] = -1
+        n_paddings = torch.sum(expt_indx == n_expts_tot + 1)
+        gate_indx[gate_indx >= n_paddings] = -1
         gate_scal = expt_scal[topk_indx]
         hist = torch.histc(expt_indx, bins=n_expts_tot // EP,
                            max=n_expts_tot // EP - 1)  # histogram of tokens over experts
