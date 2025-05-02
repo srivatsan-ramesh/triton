@@ -21,7 +21,6 @@ def _finalize_scatter_launch_metadata(grid, kernel, args):
     is_active &= need_accum[:, None]
     active_input_rows = is_active.sum()
     active_output_rows = need_accum.sum()
-    total_elts = (active_input_rows + active_output_rows) * Out.shape[-1]
 
     ret["bytes"] = (active_input_rows * K * A.shape[-1] * A.element_size() +
                     active_output_rows * Out.shape[-1] * Out.element_size() +
