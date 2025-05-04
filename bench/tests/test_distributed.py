@@ -151,5 +151,4 @@ def test_routing_distributed_EP(monkeypatch):
     assert torch.equal(gather_indx.dst_indx, gate_indx.int())
     assert torch.equal(scatter_indx.src_indx, gate_indx.int())
     assert torch.equal(scatter_indx.dst_indx, topk_indx.int())
-    # rank0
     assert torch.equal(token_mask, torch.tensor([False, True, False, True], dtype=torch.bool, device="cuda"))
