@@ -140,10 +140,10 @@ def test_routing_distributed_EP(monkeypatch):
     monkeypatch.setattr(dist, "get_rank", lambda: 0)
     monkeypatch.setattr(dist, "all_gather_into_tensor", dummy_all_gather_into_tensor)
 
-    logits = torch.tensor([[0.1, 0.4, 0.3, 0.2], [0.5, 0.4, 0.3, 0.1]], device="cuda")
+    logits = torch.tensor([[0.1, 0.2, 0.4, 0.3], [0.5, 0.4, 0.3, 0.1]], device="cuda")
     n_expts_act = 2
     EP = 2
-    expt_indx, topk_indx = torch.tensor([[1, 2], [0, 1], [1, 2], [0, 1]], device="cuda").reshape(-1).sort(stable=True)
+    expt_indx, topk_indx = torch.tensor([[0, 1], [2, 3], [0, 1], [2, 3]], device="cuda").reshape(-1).sort(stable=True)
     gate_indx = torch.argsort(topk_indx, stable=True)
     topk_indx[expt_indx > 1] = -1
     gate_indx[gate_indx > 1] = -1
@@ -153,4 +153,4 @@ def test_routing_distributed_EP(monkeypatch):
     assert torch.equal(scatter_indx.src_indx, gate_indx.int())
     assert torch.equal(scatter_indx.dst_indx, topk_indx.int())
     # rank0
-    assert torch.equal(token_mask, torch.tensor([True, False, True, True], dtype=torch.bool))
+    assert torch.equal(token_mask, torch.tensor([True, False, True, False], dtype=torch.bool))
