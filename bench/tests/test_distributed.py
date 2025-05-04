@@ -143,7 +143,7 @@ def test_routing_distributed_EP(monkeypatch):
     logits = torch.tensor([[0.1, 0.2, 0.4, 0.3], [0.5, 0.4, 0.3, 0.1]], device="cuda")
     n_expts_act = 2
     EP = 2
-    expt_indx, topk_indx = torch.tensor([[2, 3], [0, 1], [2, 3], [0, 1]], device="cuda").reshape(-1).sort(stable=True)
+    expt_indx, topk_indx = torch.tensor([[2, 3], [0, 1]], device="cuda").reshape(-1).sort(stable=True)
     gate_indx = torch.argsort(topk_indx, stable=True)
     topk_indx[expt_indx > 1] = -1
     gate_indx[gate_indx > 1] = -1
