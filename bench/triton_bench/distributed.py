@@ -110,7 +110,7 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         # expt_indx: [expt0 => row4, row1, row0, ..., expt1 => row2, row3, ..., ...]
         # topk_indx: [2 (row0), 1 (row1), 3 (row2), 4 (row3), 5 (row4), ...]
         expt_indx, topk_indx = torch.sort(expt_indx, stable=True)
-        gate_indx = torch.argsort(topk_indx)
+        gate_indx = torch.argsort(topk_indx, stable=True)
         topk_indx[expt_indx == n_expts_tot + 1] = -1
         gate_indx[gate_indx >= (expt_indx != n_expts_tot + 1).sum()] = -1
         gate_scal = expt_scal[topk_indx]
