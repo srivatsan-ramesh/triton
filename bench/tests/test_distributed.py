@@ -148,9 +148,9 @@ def test_routing_distributed_EP(monkeypatch):
     topk_indx[expt_indx > 1] = -1
     gate_indx[gate_indx > 1] = -1
     rdata, gather_indx, scatter_indx, token_mask = routing(logits, n_expts_act, EP=EP)
-    assert gather_indx.src_indx == topk_indx.int()
-    assert gather_indx.dst_indx == gate_indx.int()
-    assert scatter_indx.src_indx == gate_indx.int()
-    assert scatter_indx.dst_indx == topk_indx.int()
+    assert torch.equal(gather_indx.src_indx, topk_indx.int())
+    assert torch.equal(gather_indx.dst_indx, gate_indx.int())
+    assert torch.equal(scatter_indx.src_indx, gate_indx.int())
+    assert torch.equal(scatter_indx.dst_indx, topk_indx.int())
     # rank0
-    assert token_mask == torch.tensor([True, False, True, True], dtype=torch.bool)
+    assert torch.equal(token_mask, torch.tensor([True, False, True, True], dtype=torch.bool))
