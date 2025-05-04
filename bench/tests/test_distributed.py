@@ -138,7 +138,7 @@ def test_routing_distributed_EP(monkeypatch):
     monkeypatch.setattr(dist, "is_initialized", lambda: True)
     monkeypatch.setattr(dist, "get_world_size", lambda: 2)
     monkeypatch.setattr(dist, "get_rank", lambda: 0)
-    monkeypatch.setattr(dist, "all_gather", dummy_all_gather_into_tensor)
+    monkeypatch.setattr(dist, "all_gather_into_tensor", dummy_all_gather_into_tensor)
 
     logits = torch.tensor([[0.1, 0.4, 0.3, 0.2], [0.5, 0.4, 0.3, 0.1]])
     n_expts_act = 2
