@@ -107,9 +107,7 @@ def test_reduce_scatter_distributed_with_token_mask_dim1(monkeypatch):
     monkeypatch.setattr(dist, "reduce_scatter", dummy_reduce_scatter)
 
     x = torch.randn(3, 2)
-    # mask expands second dim to 4 columns, 6 True positions matching 3*2 elements
-    token_mask = torch.tensor([[True, False, True, False], [False, True, False, True], [True, True, False, False]],
-                              dtype=torch.bool)
+    token_mask = torch.tensor([True, False, False, True], dtype=torch.bool)
     shape = [3, 4]
     x_new = x.new_zeros(shape)
     x_new[:, token_mask] = x

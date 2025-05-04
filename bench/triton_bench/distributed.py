@@ -44,7 +44,7 @@ def reduce_scatter(x: torch.Tensor, token_mask: torch.Tensor = None, dim=0):
         if token_mask is not None:
             # build the padded shape
             shape = list(x.shape)
-            shape[dim] = token_mask.shape[dim]
+            shape[dim] = token_mask.shape[0]
             # create a zero tensor, scatter x into it where mask is True, then split
             x_new = x.new_zeros(shape)
             # Expand token_mask to match x's shape for assignment
