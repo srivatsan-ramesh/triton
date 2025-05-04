@@ -47,7 +47,11 @@ def reduce_scatter(x: torch.Tensor, token_mask: torch.Tensor = None, dim=0):
             shape[dim] = token_mask.shape[dim]
             # create a zero tensor, scatter x into it where mask is True, then split
             x_new = x.new_zeros(shape)
-            x_new[token_mask] = x
+            # Expand token_mask to match x's shape for assignment
+            mask_shape = [1] * x.dim()
+            mask_shape[dim] = -1
+            expanded_mask = token_mask.reshape(mask_shape).expand_as(x_new)
+            x_new[expanded_mask] = x[expanded_mask]
             x_list = list(x_new.chunk(world_size, dim=dim))
         else:
             x_list = list(x.chunk(world_size, dim=dim))

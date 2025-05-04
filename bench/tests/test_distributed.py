@@ -112,7 +112,7 @@ def test_reduce_scatter_distributed_with_token_mask_dim1(monkeypatch):
                               dtype=torch.bool)
     shape = [3, 4]
     x_new = x.new_zeros(shape)
-    x_new[token_mask] = x
+    x_new[:, token_mask] = x.unsqueeze(1)
     expected = x_new.chunk(2, dim=1)[0]
     result = reduce_scatter(x, token_mask=token_mask, dim=1)
     assert result.shape == expected.shape
