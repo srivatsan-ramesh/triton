@@ -4,9 +4,13 @@ from triton_bench.distributed import all_gather, reduce_scatter, routing
 import torch.distributed as dist
 import triton_bench
 import torch
-from triton_bench.distributed import setup, routing
-from triton_bench.routing import RoutingData, GatherIndx, ScatterIndx
-from pytest import MonkeyPatch
+from triton_bench.distributed import routing
+from triton_bench.numerics_details.mxfp import downcast_to_mxfp
+from triton_bench.matmul_ogs import MicroscalingCtx, matmul_ogs, PrecisionConfig, FlexCtx
+from triton_bench.numerics import InFlexData
+import triton_bench.distributed as triton_dist
+
+import pytest
 
 
 def test_all_gather_non_distributed(monkeypatch):
@@ -30,6 +34,25 @@ def test_all_gather_distributed(monkeypatch):
     x = torch.randn(3, 4)
     result = all_gather(x, dim=0)
     expected = torch.cat([x, x], dim=0)
+    assert result.shape == expected.shape
+    assert torch.allclose(result, expected)
+
+
+def test_all_gather_distributed_dim1(monkeypatch):
+    # WORLD_SIZE=3, gather along dim=1 (columns)
+    monkeypatch.setenv("WORLD_SIZE", "3")
+    monkeypatch.setattr(dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(dist, "get_world_size", lambda: 3)
+
+    def dummy_all_gather_into_tensor_dim1(out, x):
+        # simulate gathering 3 replicas along dim=1
+        out.copy_(torch.cat([x, x, x], dim=1))
+
+    monkeypatch.setattr(dist, "all_gather_into_tensor", dummy_all_gather_into_tensor_dim1)
+
+    x = torch.randn(2, 2)
+    result = all_gather(x, dim=1)
+    expected = torch.cat([x, x, x], dim=1)
     assert result.shape == expected.shape
     assert torch.allclose(result, expected)
 
@@ -76,25 +99,6 @@ def test_reduce_scatter_distributed_with_token_mask(monkeypatch):
     expected = x_new.chunk(2, dim=0)[0]
 
     result = reduce_scatter(x, token_mask=token_mask, dim=0)
-    assert result.shape == expected.shape
-    assert torch.allclose(result, expected)
-
-
-def test_all_gather_distributed_dim1(monkeypatch):
-    # WORLD_SIZE=3, gather along dim=1 (columns)
-    monkeypatch.setenv("WORLD_SIZE", "3")
-    monkeypatch.setattr(dist, "is_initialized", lambda: True)
-    monkeypatch.setattr(dist, "get_world_size", lambda: 3)
-
-    def dummy_all_gather_into_tensor_dim1(out, x):
-        # simulate gathering 3 replicas along dim=1
-        out.copy_(torch.cat([x, x, x], dim=1))
-
-    monkeypatch.setattr(dist, "all_gather_into_tensor", dummy_all_gather_into_tensor_dim1)
-
-    x = torch.randn(2, 2)
-    result = all_gather(x, dim=1)
-    expected = torch.cat([x, x, x], dim=1)
     assert result.shape == expected.shape
     assert torch.allclose(result, expected)
 
@@ -152,3 +156,96 @@ def test_routing_distributed_EP(monkeypatch):
     assert torch.equal(scatter_indx.src_indx, gate_indx.int())
     assert torch.equal(scatter_indx.dst_indx, topk_indx.int())
     assert torch.equal(token_mask, torch.tensor([False, True, False, True], dtype=torch.bool, device="cuda"))
+
+
+def quantize(w, dtype, dev, **opt):
+    if dtype == "bf16":
+        wq = w.to(torch.bfloat16).transpose(-1, -2).contiguous().transpose(-1, -2)
+        return wq, InFlexData(), MicroscalingCtx()
+    else:
+        assert dtype == "mx4", f"{dtype=}"
+        swizzle_mx_scale = opt["swizzle_mx_scale"]
+        swizzle_axis = 2 if swizzle_mx_scale else None
+        w = w.to(torch.bfloat16)
+        w, mx_scales, weight_scale_shape = downcast_to_mxfp(w, torch.uint8, axis=1, swizzle_axis=swizzle_axis)
+        return w, InFlexData(), MicroscalingCtx(weight_scale=mx_scales, swizzle_mx=swizzle_mx_scale,
+                                                actual_weight_scale_shape=weight_scale_shape)
+
+
+@pytest.mark.parametrize(
+    "batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP",
+    [
+        (1024, 512, 512, 128, 2, "fp16", "fp16", 2, 2),
+    ],
+)
+def test_mlp_mp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP, monkeypatch):
+    if torch.cuda.device_count() < 4:
+        pytest.skip("Test requires at least 4 GPUs.")
+
+    monkeypatch.setenv("WORLD_SIZE", "4")
+
+    rank, world_size = triton_dist.setup()
+    dev = f"cuda:{rank}"
+    DP = world_size
+
+    # input
+    # weights
+    wg = torch.randn((dim1, n_expts_tot), device=dev)
+    w1 = torch.randn((n_expts_tot // EP, dim1, dim2 // TP), device=dev)
+    w2 = torch.randn((n_expts_tot // EP, dim2 // TP // 2, dim1), device=dev)
+    # biases
+    bg = torch.randn((n_expts_tot, ), device=dev)
+    b1 = torch.randn((dim2 // TP, ), device=dev)
+    b2 = torch.randn((dim1, ), device=dev)
+
+    # -- numerics --
+    optg = dict()
+    opt1 = {"swizzle_mx_scale": True} if w_dtype == "mx4" else dict()
+    opt2 = {"swizzle_mx_scale": True} if w_dtype == "mx4" else dict()
+    wg, wg_flex, wg_mx = quantize(wg, "bf16", dev, **optg)
+    w1, w1_flex, w1_mx = quantize(w1, w_dtype, dev, **opt1)
+    w2, w2_flex, w2_mx = quantize(w2, w_dtype, dev, **opt2)
+    pcg = PrecisionConfig(mx_ctx=wg_mx, flex_ctx=FlexCtx(rhs_data=wg_flex))
+    pcs = triton_bench.swiglu.PrecisionConfig(limit=1.0)
+    pc1 = PrecisionConfig(mx_ctx=w1_mx, flex_ctx=FlexCtx(rhs_data=w1_flex))
+    pc2 = PrecisionConfig(mx_ctx=w2_mx, flex_ctx=FlexCtx(rhs_data=w2_flex))
+    x_single = torch.randn((batch, dim1), device=dev)
+    x_distributed = torch.randn((batch // DP, dim1), device=dev)
+
+    def single(x):
+        x = x.to(x_dtype)
+        xg = x.to(wg.dtype if n_expts_tot > 1 else x_dtype)
+        for i in range(100):
+            if n_expts_tot > 1:
+                logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
+                rdata, gather_indx, scatter_indx = routing(logits, n_expts_act, EP=EP)
+            else:
+                rdata, gather_indx, scatter_indx = None, None, None
+            x = matmul_ogs(x, w1, b1, rdata, gather_indx=gather_indx, precision_config=pc1)
+            x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
+            x = matmul_ogs(x, w2, b2, rdata, scatter_indx=scatter_indx, precision_config=pc2)
+        return x
+
+    def distributed(x):
+        x = x.to(x_dtype)
+        xg = x.to(wg.dtype if n_expts_tot > 1 else x_dtype)
+        x = triton_dist.all_gather(x, dim=0)
+        for i in range(100):
+            if n_expts_tot > 1:
+                logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
+                rdata, gather_indx, scatter_indx, token_mask = triton_dist.routing(logits, n_expts_act, EP=EP)
+            else:
+                rdata, gather_indx, scatter_indx, token_mask = None, None, None, None
+            x = matmul_ogs(x, w1, b1, rdata, gather_indx=gather_indx, precision_config=pc1)
+            x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
+            x = matmul_ogs(x, w2, b2, rdata, scatter_indx=scatter_indx, precision_config=pc2)
+        x = triton_dist.reduce_scatter(x, token_mask=token_mask, dim=0)
+        return x
+
+    # Run the single GPU version
+    single_result = single(x_single)
+    # Run the distributed version
+    distributed_result = distributed(x_distributed)
+    # Check if the results are close
+    assert torch.allclose(single_result, distributed_result,
+                          atol=1e-2), f"Results differ: {single_result} vs {distributed_result}"
