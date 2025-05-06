@@ -286,6 +286,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         single_result = single(x0)
         assert torch.allclose(distributed_result, single_result)
 
+    dist.destroy_process_group()
+
 
 @pytest.mark.parametrize(
     "batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP",
