@@ -221,8 +221,12 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
             dim=0,
         )
 
-    b1_full = torch.zeros((dim2, ), device=dev)
-    dist.all_gather_into_tensor(b1_full, b1, group=tp_group)
+    b1_list = []
+    if rank == 0:
+        b1_list = [torch.zeros_like(b1) for _ in range(world_size)]
+    dist.gather(b1, b1_list, dst=0)
+    if rank == 0:
+        b1_full = torch.cat((b1_list[0], b1_list[1], b1_list[2], b1_list[3]), dim=0)
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
