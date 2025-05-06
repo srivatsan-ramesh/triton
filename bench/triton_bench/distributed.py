@@ -121,4 +121,5 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         scatter_indx = ScatterIndx(src_indx=gate_indx.int(), dst_indx=topk_indx.int())
         return RoutingData(gate_scal, hist, n_expts_tot // EP, n_expts_act), gather_indx, scatter_indx, token_mask
     else:
-        return triton_bench.routing.routing(logits, n_expts_act, expt_indx, EP), None
+        routing_data, gather_index, scatter_indx = triton_bench.routing.routing(logits, n_expts_act, expt_indx, EP)
+        return routing_data, gather_index, scatter_indx, None

@@ -253,8 +253,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
             rdata = gi = si = None
         x = matmul_ogs(x, w1_full, b1_full, rdata, gather_indx=gi, precision_config=pc1_f)
         x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
-        x = matmul_ogs(x, w2_full, b2, rdata, scatter_indx=si, precision_config=pc2_f)
-        return x
+        return matmul_ogs(x, w2_full, b2, rdata, scatter_indx=si, precision_config=pc2_f)
 
     # distributed pass
     def distributed(x):
