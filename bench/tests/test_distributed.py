@@ -195,16 +195,28 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     b2 = torch.randn((dim1, ), device=dev)
 
     # gather to full replicas
-    w1_full = torch.zeros((n_expts_tot, dim1, dim2), device=dev)
-    dist.all_gather_into_tensor(w1_full, w1, dim=2, group=tp_group)
-    dist.all_gather_into_tensor(w1_full, w1_full, dim=0, group=ep_group)
+    w1_list = []
+    dist.gather(w1, w1_list, dst=0)
+    w1_full = torch.cat(
+        (
+            torch.cat((w1_list[0], w1_list[1]), dim=2),
+            torch.cat((w1_list[2], w1_list[3]), dim=2),
+        ),
+        dim=0,
+    )
 
-    w2_full = torch.zeros((n_expts_tot, dim2 // 2, dim1), device=dev)
-    dist.all_gather_into_tensor(w2_full, w2, dim=2, group=tp_group)
-    dist.all_gather_into_tensor(w2_full, w2_full, dim=0, group=ep_group)
+    w2_list = []
+    dist.gather(w2, w2_list, dst=0)
+    w2_full = torch.cat(
+        (
+            torch.cat((w2_list[0], w2_list[1]), dim=1),
+            torch.cat((w2_list[2], w2_list[3]), dim=1),
+        ),
+        dim=0,
+    )
 
     b1_full = torch.zeros((dim2, ), device=dev)
-    dist.all_gather_into_tensor(b1_full, b1, dim=0, group=tp_group)
+    dist.all_gather_into_tensor(b1_full, b1, group=tp_group)
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
@@ -212,21 +224,25 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     wg, wg_flex, wg_mx = quantize(wg, "bf16", dev)
     w1, w1_flex, w1_mx = quantize(w1, w_dtype, dev, **opt)
     w2, w2_flex, w2_mx = quantize(w2, w_dtype, dev, **opt)
-    w1_full, w1_flex_f, w1_mx_f = quantize(w1_full, w_dtype, dev, **opt)
-    w2_full, w2_flex_f, w2_mx_f = quantize(w2_full, w_dtype, dev, **opt)
+    if rank == 0:
+        w1_full, w1_flex_f, w1_mx_f = quantize(w1_full, w_dtype, dev, **opt)
+        w2_full, w2_flex_f, w2_mx_f = quantize(w2_full, w_dtype, dev, **opt)
 
     # precision configs
     pcg = PrecisionConfig(mx_ctx=wg_mx, flex_ctx=FlexCtx(rhs_data=wg_flex))
     pcs = triton_bench.swiglu.PrecisionConfig(limit=1.0)
     pc1 = PrecisionConfig(mx_ctx=w1_mx, flex_ctx=FlexCtx(rhs_data=w1_flex))
     pc2 = PrecisionConfig(mx_ctx=w2_mx, flex_ctx=FlexCtx(rhs_data=w2_flex))
-    pc1_f = PrecisionConfig(mx_ctx=w1_mx_f, flex_ctx=FlexCtx(rhs_data=w1_flex_f))
-    pc2_f = PrecisionConfig(mx_ctx=w2_mx_f, flex_ctx=FlexCtx(rhs_data=w2_flex_f))
+    if rank == 0:
+        pc1_f = PrecisionConfig(mx_ctx=w1_mx_f, flex_ctx=FlexCtx(rhs_data=w1_flex_f))
+        pc2_f = PrecisionConfig(mx_ctx=w2_mx_f, flex_ctx=FlexCtx(rhs_data=w2_flex_f))
 
     # inputs
     dtype_map = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp8": torch.float8_e4m3fn}
-    x0 = torch.randn((batch, dim1), device=dev).to(dtype_map[x_dtype])
     xd = torch.randn((batch // world_size, dim1), device=dev).to(dtype_map[x_dtype])
+    x_list = []
+    dist.gather(xd, x_list, dst=0)
+    x0 = torch.cat(x_list, dim=0)
 
     # single-GPU pass
     def single(x):
@@ -256,7 +272,10 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         return triton_dist.reduce_scatter(x, token_mask=tm, dim=0)
 
     # verify correctness
-    assert torch.allclose(single(x0), distributed(xd), atol=1e-2)
+    distributed_result = distributed(xd)
+    if rank == 0:
+        single_result = single(x0)
+        assert torch.allclose(distributed_result, single_result)
 
 
 @pytest.mark.parametrize(
