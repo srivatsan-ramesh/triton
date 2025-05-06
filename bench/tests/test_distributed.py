@@ -6,7 +6,6 @@ import triton_bench
 import torch
 import torch.multiprocessing as mp
 import triton_bench.swiglu
-from triton_bench.distributed import routing
 from triton_bench.numerics_details.mxfp import downcast_to_mxfp
 from triton_bench.matmul_ogs import MicroscalingCtx, matmul_ogs, PrecisionConfig, FlexCtx
 from triton_bench.numerics import InFlexData
@@ -215,7 +214,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         for i in range(100):
             if n_expts_tot > 1:
                 logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
-                rdata, gather_indx, scatter_indx = routing(logits, n_expts_act, EP=EP)
+                rdata, gather_indx, scatter_indx = triton_bench.routing(logits, n_expts_act, EP=EP)
             else:
                 rdata, gather_indx, scatter_indx = None, None, None
             x = matmul_ogs(x, w1, b1, rdata, gather_indx=gather_indx, precision_config=pc1)
