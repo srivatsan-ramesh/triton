@@ -207,6 +207,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     x_single = torch.randn((batch, dim1), device=dev)
     x_distributed = torch.randn((batch // DP, dim1), device=dev)
 
+    x_dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp8": torch.float8_e4m3fn}[x_dtype]
+
     def single(x):
         x = x.to(x_dtype)
         xg = x.to(wg.dtype if n_expts_tot > 1 else x_dtype)
