@@ -196,33 +196,33 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         w1_list = [torch.zeros_like(w1) for _ in range(world_size)]
     dist.gather(w1, w1_list, dst=0)
     if rank == 0:
-        w1_full = torch.cat(
-            (
-                torch.cat((w1_list[0], w1_list[1]), dim=2),
-                torch.cat((w1_list[2], w1_list[3]), dim=2),
-            ),
-            dim=0,
-        )
+        idx = 0
+        w1_full = torch.empty_like((n_expts_tot, dim1, dim2), w1_list[0])
+        for i in range(0, n_expts_tot, n_expts_tot // EP):
+            for j in range(0, dim2, dim2 // TP):
+                w1_full[i:i + n_expts_tot // EP, :, j:j + dim2 // TP] = w1_list[idx]
+                idx += 1
 
     w2_list = []
     if rank == 0:
         w2_list = [torch.zeros_like(w2) for _ in range(world_size)]
     dist.gather(w2, w2_list, dst=0)
     if rank == 0:
-        w2_full = torch.cat(
-            (
-                torch.cat((w2_list[0], w2_list[1]), dim=1),
-                torch.cat((w2_list[2], w2_list[3]), dim=1),
-            ),
-            dim=0,
-        )
+        idx = 0
+        w2_full = torch.empty_like((n_expts_tot, dim2 // TP // 2, dim1), w2_list[0])
+        for i in range(0, n_expts_tot, n_expts_tot // EP):
+            for j in range(0, dim2 // 2, dim2 // 2 // TP):
+                w2_full[i:i + n_expts_tot // EP, j:j + dim2 // 2 // TP, :] = w2_list[idx]
+                idx += 1
 
     b1_list = []
     if rank == 0:
         b1_list = [torch.zeros_like(b1) for _ in range(world_size)]
     dist.gather(b1, b1_list, dst=0)
     if rank == 0:
-        b1_full = torch.cat((b1_list[0], b1_list[1], b1_list[2], b1_list[3]), dim=0)
+        b1_full = torch.empty_like((dim2, ), b1_list[0])
+        for i in range(0, dim2, dim2 // TP):
+            b1_full[i:i + dim2 // TP] = b1_list[i // (dim2 // TP)]
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
@@ -292,7 +292,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
 @pytest.mark.parametrize(
     "batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP",
     [
-        (1024, 512, 512, 128, 2, "bf16", "bf16", 2, 2),
+        (1024, 512, 512, 128, 2, "bf16", "bf16", 4, 1),
     ],
 )
 def test_mlp_mp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP, monkeypatch):
