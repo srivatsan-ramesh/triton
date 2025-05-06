@@ -284,19 +284,21 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
 @pytest.mark.parametrize(
     "batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP",
     [
+        (1024, 512, 512, 128, 2, "bf16", "bf16", 1, 1),
         (1024, 512, 512, 128, 2, "bf16", "bf16", 4, 1),
     ],
 )
 def test_mlp_mp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP, monkeypatch):
-    if torch.cuda.device_count() < 4:
-        pytest.skip("Test requires at least 4 GPUs.")
+    parallelism = TP * EP
+    if torch.cuda.device_count() < parallelism:
+        pytest.skip(f"Test requires at least {parallelism} GPUs.")
 
-    monkeypatch.setenv("WORLD_SIZE", "4")
+    monkeypatch.setenv("WORLD_SIZE", f"{parallelism}")
     monkeypatch.setenv("MASTER_ADDR", "127.0.0.1")
     monkeypatch.setenv("MASTER_PORT", "12355")
     mp.spawn(
         distributed_run,
-        args=(4, batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP),
-        nprocs=4,
+        args=(parallelism, batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP),
+        nprocs=parallelism,
         join=True,
     )
