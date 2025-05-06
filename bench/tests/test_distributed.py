@@ -196,24 +196,30 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
 
     # gather to full replicas
     w1_list = []
+    if rank == 0:
+        w1_list = [torch.zeros_like(w1) for _ in range(world_size)]
     dist.gather(w1, w1_list, dst=0)
-    w1_full = torch.cat(
-        (
-            torch.cat((w1_list[0], w1_list[1]), dim=2),
-            torch.cat((w1_list[2], w1_list[3]), dim=2),
-        ),
-        dim=0,
-    )
+    if rank == 0:
+        w1_full = torch.cat(
+            (
+                torch.cat((w1_list[0], w1_list[1]), dim=2),
+                torch.cat((w1_list[2], w1_list[3]), dim=2),
+            ),
+            dim=0,
+        )
 
     w2_list = []
+    if rank == 0:
+        w2_list = [torch.zeros_like(w2) for _ in range(world_size)]
     dist.gather(w2, w2_list, dst=0)
-    w2_full = torch.cat(
-        (
-            torch.cat((w2_list[0], w2_list[1]), dim=1),
-            torch.cat((w2_list[2], w2_list[3]), dim=1),
-        ),
-        dim=0,
-    )
+    if rank == 0:
+        w2_full = torch.cat(
+            (
+                torch.cat((w2_list[0], w2_list[1]), dim=1),
+                torch.cat((w2_list[2], w2_list[3]), dim=1),
+            ),
+            dim=0,
+        )
 
     b1_full = torch.zeros((dim2, ), device=dev)
     dist.all_gather_into_tensor(b1_full, b1, group=tp_group)
