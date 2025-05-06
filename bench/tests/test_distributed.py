@@ -258,9 +258,9 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
             rdata, gi, si = triton_bench.routing.routing(logits, n_expts_act)
         else:
             rdata = gi = si = None
-        x = matmul_ogs(x, w1, b1, rdata, gather_indx=gi, precision_config=pc1)
+        x = matmul_ogs(x, w1_full, b1_full, rdata, gather_indx=gi, precision_config=pc1)
         x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
-        x = matmul_ogs(x, w2, b2, rdata, scatter_indx=si, precision_config=pc2)
+        x = matmul_ogs(x, w2_full, b2, rdata, scatter_indx=si, precision_config=pc2)
         return x
 
     # distributed pass
@@ -272,9 +272,9 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
             rdata, gi, si, tm = triton_dist.routing(logits, n_expts_act, EP=EP)
         else:
             rdata = gi = si = tm = None
-        x = matmul_ogs(x, w1_full, b1_full, rdata, gather_indx=gi, precision_config=pc1_f)
+        x = matmul_ogs(x, w1, b1, rdata, gather_indx=gi, precision_config=pc1_f)
         x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
-        x = matmul_ogs(x, w2_full, b2, rdata, scatter_indx=si, precision_config=pc2_f)
+        x = matmul_ogs(x, w2, b2, rdata, scatter_indx=si, precision_config=pc2_f)
         return triton_dist.reduce_scatter(x, token_mask=tm, dim=0)
 
     # verify correctness
