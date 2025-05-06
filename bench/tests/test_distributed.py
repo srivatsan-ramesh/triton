@@ -257,8 +257,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
 
     # distributed pass
     def distributed(x):
-        x = triton_dist.all_gather(x, dim=0)
         xg = x.to(wg.dtype if n_expts_tot > 1 else x.dtype)
+        x = triton_dist.all_gather(x, dim=0)
         if n_expts_tot > 1:
             logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
             rdata, gi, si, tm = triton_dist.routing(logits, n_expts_act, EP=EP)
@@ -267,7 +267,9 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         x = matmul_ogs(x, w1, b1, rdata, gather_indx=gi, precision_config=pc1)
         x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
         x = matmul_ogs(x, w2, b2, rdata, scatter_indx=si, precision_config=pc2)
-        return triton_dist.reduce_scatter(x, token_mask=tm, dim=0)
+        x = triton_dist.reduce_scatter(x, token_mask=tm, dim=0)
+        # gather the result from all GPUs, just for verification
+        return triton_dist.all_gather(x, dim=0)
 
     # verify correctness
     distributed_result = distributed(xd)
