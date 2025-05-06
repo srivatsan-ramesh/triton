@@ -5,6 +5,7 @@ import torch.distributed as dist
 import triton_bench
 import torch
 import torch.multiprocessing as mp
+import triton_bench.swiglu
 from triton_bench.distributed import routing
 from triton_bench.numerics_details.mxfp import downcast_to_mxfp
 from triton_bench.matmul_ogs import MicroscalingCtx, matmul_ogs, PrecisionConfig, FlexCtx
@@ -169,8 +170,12 @@ def quantize(w, dtype, dev, **opt):
         swizzle_axis = 2 if swizzle_mx_scale else None
         w = w.to(torch.bfloat16)
         w, mx_scales, weight_scale_shape = downcast_to_mxfp(w, torch.uint8, axis=1, swizzle_axis=swizzle_axis)
-        return w, InFlexData(), MicroscalingCtx(weight_scale=mx_scales, swizzle_mx=swizzle_mx_scale,
-                                                actual_weight_scale_shape=weight_scale_shape)
+        return (
+            w,
+            InFlexData(),
+            MicroscalingCtx(weight_scale=mx_scales, swizzle_mx=swizzle_mx_scale,
+                            actual_weight_scale_shape=weight_scale_shape),
+        )
 
 
 def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP):
@@ -244,7 +249,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
 @pytest.mark.parametrize(
     "batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP",
     [
-        (1024, 512, 512, 128, 2, "fp16", "fp16", 2, 2),
+        (1024, 512, 512, 128, 2, "bf16", "bf16", 2, 2),
     ],
 )
 def test_mlp_mp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP, monkeypatch):
@@ -253,5 +258,9 @@ def test_mlp_mp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, T
 
     monkeypatch.setenv("MASTER_ADDR", "localhost")
     monkeypatch.setenv("MASTER_PORT", "12355")
-    mp.spawn(distributed_run, args=(4, batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP), nprocs=4,
-             join=True)
+    mp.spawn(
+        distributed_run,
+        args=(4, batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP),
+        nprocs=4,
+        join=True,
+    )
