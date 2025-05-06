@@ -301,6 +301,7 @@ def test_mlp_mp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, T
     if torch.cuda.device_count() < 4:
         pytest.skip("Test requires at least 4 GPUs.")
 
+    monkeypatch.setenv("WORLD_SIZE", "4")
     monkeypatch.setenv("MASTER_ADDR", "127.0.0.1")
     monkeypatch.setenv("MASTER_PORT", "12355")
     mp.spawn(
