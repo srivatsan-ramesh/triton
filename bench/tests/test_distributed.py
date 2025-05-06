@@ -196,33 +196,23 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         w1_list = [torch.zeros_like(w1) for _ in range(world_size)]
     dist.gather(w1, w1_list, dst=0)
     if rank == 0:
-        idx = 0
-        w1_full = torch.empty_like((n_expts_tot, dim1, dim2), w1_list[0])
-        for i in range(0, n_expts_tot, n_expts_tot // EP):
-            for j in range(0, dim2, dim2 // TP):
-                w1_full[i:i + n_expts_tot // EP, :, j:j + dim2 // TP] = w1_list[idx]
-                idx += 1
+        rows = [torch.cat(w1_list[e * TP:(e + 1) * TP], dim=2) for e in range(EP)]
+        w1_full = torch.cat(rows, dim=0)
 
     w2_list = []
     if rank == 0:
         w2_list = [torch.zeros_like(w2) for _ in range(world_size)]
     dist.gather(w2, w2_list, dst=0)
     if rank == 0:
-        idx = 0
-        w2_full = torch.empty_like((n_expts_tot, dim2 // TP // 2, dim1), w2_list[0])
-        for i in range(0, n_expts_tot, n_expts_tot // EP):
-            for j in range(0, dim2 // 2, dim2 // 2 // TP):
-                w2_full[i:i + n_expts_tot // EP, j:j + dim2 // 2 // TP, :] = w2_list[idx]
-                idx += 1
+        rows = [torch.cat(w2_list[e * TP:(e + 1) * TP], dim=1) for e in range(EP)]
+        w2_full = torch.cat(rows, dim=0)
 
     b1_list = []
     if rank == 0:
         b1_list = [torch.zeros_like(b1) for _ in range(world_size)]
     dist.gather(b1, b1_list, dst=0)
     if rank == 0:
-        b1_full = torch.empty_like((dim2, ), b1_list[0])
-        for i in range(0, dim2, dim2 // TP):
-            b1_full[i:i + dim2 // TP] = b1_list[i // (dim2 // TP)]
+        b1_full = torch.cat(b1_list, dim=0)
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
@@ -286,6 +276,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         single_result = single(x0)
         assert torch.allclose(distributed_result, single_result)
 
+    dist.barrier()
     dist.destroy_process_group()
 
 
