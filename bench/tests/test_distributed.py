@@ -251,8 +251,11 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     dtype_map = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp8": torch.float8_e4m3fn}
     xd = torch.randn((batch // world_size, dim1), device=dev).to(dtype_map[x_dtype])
     x_list = []
+    if rank == 0:
+        x_list = [torch.zeros_like(xd) for _ in range(world_size)]
     dist.gather(xd, x_list, dst=0)
-    x0 = torch.cat(x_list, dim=0)
+    if rank == 0:
+        x0 = torch.cat(x_list, dim=0)
 
     # single-GPU pass
     def single(x):
