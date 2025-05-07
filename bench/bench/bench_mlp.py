@@ -101,10 +101,9 @@ class PerfData:
         return max(min_t_flop, min_t_bw) / self.time
 
 
-def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP=1, name=""):
+def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP=1, EP=1, name=""):
     rank, world_size = triton_dist.setup()
     dev = f"cuda:{rank}"
-    EP = world_size // TP
     DP = world_size
     assert n_expts_tot % EP == 0
     assert dim2 % TP == 0
@@ -238,7 +237,7 @@ if __name__ == "__main__":
         roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *dense_dtypes, TP=2, EP=2, name="llama4-maverick")
         roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *quantized_dtypes, TP=2, EP=2, name="llama4-maverick")
     else:
-        roofline_mlp(batch_ranges, 8192, 8192, 1, 1, *dense_dtypes, TP=1, EP=1, name="dense")
-        roofline_mlp(batch_ranges, 8192, 8192, 1, 1, *quantized_dtypes, TP=1, EP=1, name="dense")
-        roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *dense_dtypes, TP=1, EP=1, name="llama4-maverick")
-        roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *quantized_dtypes, TP=1, EP=1, name="llama4-maverick")
+        roofline_mlp(batch_ranges, 8192, 8192, 1, 1, *dense_dtypes, name="dense")
+        roofline_mlp(batch_ranges, 8192, 8192, 1, 1, *quantized_dtypes, name="dense")
+        roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *dense_dtypes, name="llama4-maverick")
+        roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *quantized_dtypes, name="llama4-maverick")
