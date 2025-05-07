@@ -181,7 +181,6 @@ def bench_mlp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP=
 
 def roofline_mlp(batch_ranges, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP=1, EP=1, name="",
                  verbose=True):
-    import numpy as np
     from itertools import chain
     from bisect import bisect_left
     batches = list(chain(*[range(*r) for r in batch_ranges]))
