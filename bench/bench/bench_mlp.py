@@ -242,3 +242,5 @@ if __name__ == "__main__":
         roofline_mlp(batch_ranges, 8192, 8192, 1, 1, *quantized_dtypes, name="dense")
         roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *dense_dtypes, name="llama4-maverick")
         roofline_mlp(batch_ranges, 5120, 8192, 128, 4, *quantized_dtypes, name="llama4-maverick")
+
+    triton_dist.cleanup()
