@@ -194,6 +194,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
         for i in range(rank + EP, world_size, EP):
             dist.send(b2, dst=i)
+        b2_full = b2
     else:
         b2 = torch.empty((n_expts_tot // EP, dim1), device=dev)
         dist.recv(b2, src = rank % EP) 
@@ -226,14 +227,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     if rank == 0:
         rows = [torch.cat(b1_list[e * TP:(e + 1) * TP], dim=1) for e in range(EP)]
         b1_full = torch.cat(rows, dim=0)
-    
-    b2_list = []
-    if rank == 0:
-        b2_list = [torch.zeros_like(b2) for _ in range(world_size)]
-    dist.gather(b2, b2_list, dst=0)
-    if rank == 0:
-        rows = [torch.cat(b2_list[e * TP:(e + 1) * TP], dim=1) for e in range(EP)]
-        b2_full = torch.cat(rows, dim=0)
+
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
