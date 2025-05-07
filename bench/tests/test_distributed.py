@@ -299,7 +299,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         torch.testing.assert_close(distributed_result, single_result)
 
     dist.barrier()
-    triton_dist.cleanup()
+    dist.destroy_process_group()
 
 
 @pytest.mark.parametrize(
