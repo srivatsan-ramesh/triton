@@ -24,6 +24,13 @@ def setup() -> Tuple[int, int]:
     return local_rank, world_size
 
 
+def cleanup():
+    if _is_distributed_launch():
+        dist.destroy_process_group()
+    else:
+        pass
+
+
 def all_gather(x: torch.Tensor, dim=0):
     if _is_distributed_launch():
         world_size = dist.get_world_size()

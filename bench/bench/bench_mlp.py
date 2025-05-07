@@ -219,7 +219,8 @@ def roofline_mlp(batch_ranges, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_
     ax.legend(frameon=False, loc="lower right")
     ax.grid(True, which="both", ls=":", lw=0.5)
     fig.tight_layout()
-    fpath = Path(f"logs/{name}/{x_dtype}-{w_dtype}-TP{TP}-EP{EP}/roofline.png")
+    rank, _ = triton_dist.setup()
+    fpath = Path(f"logs/{name}/{rank}/{x_dtype}-{w_dtype}-TP{TP}-EP{EP}/roofline.png")
     plt.savefig(fpath)
 
 
