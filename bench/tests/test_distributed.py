@@ -178,12 +178,29 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     dev = f"cuda:{rank}"
 
     # weights & biases
-    wg = torch.randn((dim1, n_expts_tot), device=dev)
+    if rank == 0:
+        wg = torch.randn((dim1, n_expts_tot), device=dev)
+    else:
+        wg = torch.empty((dim1, n_expts_tot), device=dev)
+    dist.broadcast(wg, src=0)
+
+    if rank == 0:
+        bg = torch.randn((n_expts_tot,), device=dev)
+    else:
+        bg = torch.empty((n_expts_tot,), device=dev)
+    dist.broadcast(bg, src=0)
+
+    if rank < EP:
+        b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
+        for i in range(rank, world_size - EP, EP):
+            dist.send(b2, dst=i + EP)
+    else:
+        b2 = torch.empty((n_expts_tot // EP, dim1), device=dev)
+        dist.recv(b2, src = rank % EP) 
+
     w1 = torch.randn((n_expts_tot // EP, dim1, dim2 // TP), device=dev)
     w2 = torch.randn((n_expts_tot // EP, dim2 // TP // 2, dim1), device=dev)
-    bg = torch.randn((n_expts_tot, ), device=dev)
     b1 = torch.randn((n_expts_tot // EP, dim2 // TP), device=dev)
-    b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
 
     # gather to full replicas
     w1_list = []
@@ -282,7 +299,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         torch.testing.assert_close(distributed_result, single_result)
 
     dist.barrier()
-    dist.destroy_process_group()
+    triton_dist.cleanup()
 
 
 @pytest.mark.parametrize(
