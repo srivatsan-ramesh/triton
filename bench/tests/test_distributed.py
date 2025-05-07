@@ -18,7 +18,7 @@ def test_all_gather_non_distributed(monkeypatch):
     monkeypatch.setenv("WORLD_SIZE", "1")
     x = torch.randn(4, 5)
     result = triton_dist.all_gather(x, dim=0)
-    assert torch.allclose(result, x)
+    torch.testing.assert_close(result, x)
 
 
 def test_all_gather_distributed(monkeypatch):
@@ -35,8 +35,7 @@ def test_all_gather_distributed(monkeypatch):
     x = torch.randn(3, 4)
     result = triton_dist.all_gather(x, dim=0)
     expected = torch.cat([x, x], dim=0)
-    assert result.shape == expected.shape
-    assert torch.allclose(result, expected)
+    torch.testing.assert_close(result, expected)
 
 
 def test_all_gather_distributed_dim1(monkeypatch):
@@ -54,15 +53,14 @@ def test_all_gather_distributed_dim1(monkeypatch):
     x = torch.randn(2, 2)
     result = triton_dist.all_gather(x, dim=1)
     expected = torch.cat([x, x, x], dim=1)
-    assert result.shape == expected.shape
-    assert torch.allclose(result, expected)
+    torch.testing.assert_close(result, expected)
 
 
 def test_reduce_scatter_non_distributed(monkeypatch):
     monkeypatch.setenv("WORLD_SIZE", "1")
     x = torch.randn(4, 6)
     result = triton_dist.reduce_scatter(x, token_mask=None, dim=0)
-    assert torch.allclose(result, x)
+    torch.testing.assert_close(result, x)
 
 
 def dummy_reduce_scatter(out, x_list):
@@ -79,8 +77,7 @@ def test_reduce_scatter_distributed_no_token_mask(monkeypatch):
     expected = x.chunk(2, dim=0)[0]
 
     result = triton_dist.reduce_scatter(x, token_mask=None, dim=0)
-    assert result.shape == expected.shape
-    assert torch.allclose(result, expected)
+    torch.testing.assert_close(result, expected)
 
 
 def test_reduce_scatter_distributed_with_token_mask(monkeypatch):
@@ -100,8 +97,7 @@ def test_reduce_scatter_distributed_with_token_mask(monkeypatch):
     expected = x_new.chunk(2, dim=0)[0]
 
     result = triton_dist.reduce_scatter(x, token_mask=token_mask, dim=0)
-    assert result.shape == expected.shape
-    assert torch.allclose(result, expected)
+    torch.testing.assert_close(result, expected)
 
 
 def test_reduce_scatter_distributed_with_token_mask_dim1(monkeypatch):
@@ -118,8 +114,7 @@ def test_reduce_scatter_distributed_with_token_mask_dim1(monkeypatch):
     x_new[:, token_mask] = x
     expected = x_new.chunk(2, dim=1)[0]
     result = triton_dist.reduce_scatter(x, token_mask=token_mask, dim=1)
-    assert result.shape == expected.shape
-    assert torch.allclose(result, expected)
+    torch.testing.assert_close(result, expected)
 
 
 def test_routing_non_distributed(monkeypatch):
@@ -275,7 +270,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     distributed_result = distributed(xd)
     if rank == 0:
         single_result = single(x0)
-        assert torch.allclose(distributed_result, single_result)
+        torch.testing.assert_close(distributed_result, single_result)
 
     dist.barrier()
     dist.destroy_process_group()
