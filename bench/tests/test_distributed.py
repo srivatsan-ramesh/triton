@@ -192,8 +192,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
 
     if rank < EP:
         b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
-        for i in range(rank, world_size, EP):
-            dist.send(b2, dst=i + EP)
+        for i in range(rank + EP, world_size, EP):
+            dist.send(b2, dst=i)
     else:
         b2 = torch.empty((n_expts_tot // EP, dim1), device=dev)
         dist.recv(b2, src = rank % EP) 
