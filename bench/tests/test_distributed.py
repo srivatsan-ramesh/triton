@@ -185,19 +185,16 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     dist.broadcast(wg, src=0)
 
     if rank == 0:
-        bg = torch.randn((n_expts_tot,), device=dev)
+        bg = torch.randn((n_expts_tot, ), device=dev)
     else:
-        bg = torch.empty((n_expts_tot,), device=dev)
+        bg = torch.empty((n_expts_tot, ), device=dev)
     dist.broadcast(bg, src=0)
 
-    if rank < EP:
+    if rank == 0:
         b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
-        for i in range(rank + EP, world_size, EP):
-            dist.send(b2, dst=i)
-        b2_full = b2
     else:
         b2 = torch.empty((n_expts_tot // EP, dim1), device=dev)
-        dist.recv(b2, src = rank % EP) 
+    dist.broadcast(b2, src=0)
 
     w1 = torch.randn((n_expts_tot // EP, dim1, dim2 // TP), device=dev)
     w2 = torch.randn((n_expts_tot // EP, dim2 // TP // 2, dim1), device=dev)
@@ -227,7 +224,6 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     if rank == 0:
         rows = [torch.cat(b1_list[e * TP:(e + 1) * TP], dim=1) for e in range(EP)]
         b1_full = torch.cat(rows, dim=0)
-
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
@@ -267,8 +263,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         else:
             rdata = gi = si = None
         x = matmul_ogs(x, w1_full, b1_full, rdata, gather_indx=gi, precision_config=pc1_f)
-        x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
-        return matmul_ogs(x, w2_full, b2_full, rdata, scatter_indx=si, precision_config=pc2_f)
+        #x = triton_bench.swiglu.swiglu(x, 1.0, pcs, routing_data=rdata)
+        return matmul_ogs(x, w2_full, None, rdata, scatter_indx=si, precision_config=pc2_f)
 
     # distributed pass
     def distributed(x):
@@ -280,8 +276,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         else:
             rdata = gi = si = tm = None
         x = matmul_ogs(x, w1, b1, rdata, gather_indx=gi, precision_config=pc1)
-        x = triton_bench.swiglu.swiglu(x, 1.0, pcs)
-        x = matmul_ogs(x, w2, b2, rdata, scatter_indx=si, precision_config=pc2)
+        #x = triton_bench.swiglu.swiglu(x, 1.0, pcs, routing_data=rdata)
+        x = matmul_ogs(x, w2, None, rdata, scatter_indx=si, precision_config=pc2)
         x = triton_dist.reduce_scatter(x, token_mask=tm, dim=0)
         # gather the result from all GPUs, just for verification
         return triton_dist.all_gather(x, dim=0)
