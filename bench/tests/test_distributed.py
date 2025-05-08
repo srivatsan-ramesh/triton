@@ -278,9 +278,9 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         x = matmul_ogs(x, w1, b1, rdata, gather_indx=gi, precision_config=pc1)
         x = triton_bench.swiglu.swiglu(x, 1.0, pcs, routing_data=rdata)
         if rank == 0:
-            x = matmul_ogs(x, w2, None, rdata, scatter_indx=si, precision_config=pc2)
-        else:
             x = matmul_ogs(x, w2, b2, rdata, scatter_indx=si, precision_config=pc2)
+        else:
+            x = matmul_ogs(x, w2, None, rdata, scatter_indx=si, precision_config=pc2)
         x = triton_dist.reduce_scatter(x, token_mask=tm, dim=0)
         # gather the result from all GPUs, just for verification
         return triton_dist.all_gather(x, dim=0)
