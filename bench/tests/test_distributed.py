@@ -279,15 +279,15 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         x = triton_dist.all_gather(x, dim=1)
         x = triton_bench.swiglu.swiglu(x, 1.0, pcs, routing_data=rdata)
         x = matmul_ogs(x, w2, b2, rdata, scatter_indx=si, precision_config=pc2)
+        x_shape = list(x.shape)
         x_list = []
         if rank == 0:
             x_list = [torch.zeros_like(x) for _ in range(world_size)]
         dist.gather(x, x_list, dst=0)
-        x_shape = list(x.shape)
-        x_shape[1] *= world_size
         if rank == 0:
             x = torch.cat(x_list, dim=1)
             x_list = x.chunk(world_size, dim=0)
+        x = torch.empty(x_shape, dtype=x.dtype, device=dev)
         dist.scatter(x, x_list, src=0)
         # gather the result from all GPUs, just for verification
         return triton_dist.all_gather(x, dim=0)
