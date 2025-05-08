@@ -272,7 +272,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         xg = x.to(wg.dtype if n_expts_tot > 1 else x.dtype)
         if n_expts_tot > 1:
             logits = matmul_ogs(xg, wg, bg, precision_config=pcg)
-            rdata, gi, si, tm = triton_dist.routing(logits, n_expts_act, EP=EP)
+            rdata, gi, si, tm = triton_bench.routing.routing(logits, n_expts_act)
         else:
             rdata = gi = si = tm = None
         x = matmul_ogs(x, w1, b1, rdata, gather_indx=gi, precision_config=pc1)
