@@ -34,13 +34,9 @@ def cleanup():
 def all_gather(x: torch.Tensor, dim=0):
     if _is_distributed_launch():
         world_size = dist.get_world_size()
-        # build output shape
-        shape = list(x.shape)
-        shape[dim] *= world_size
-        out = x.new_empty(shape)
-        # gather into the single tensor
-        dist.all_gather_into_tensor(out, x)
-        return out
+        x_list = [torch.empty_like(x) for _ in range(world_size)]
+        dist.all_gather(x_list, x)
+        return torch.cat(x_list, dim=dim)
     else:
         return x
 
