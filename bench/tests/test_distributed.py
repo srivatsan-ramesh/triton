@@ -231,16 +231,18 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     wg, wg_flex, wg_mx = quantize(wg, "bf16", dev)
     w1, w1_flex, w1_mx = quantize(w1, w_dtype, dev, **opt)
     w2, w2_flex, w2_mx = quantize(w2, w_dtype, dev, **opt)
-    w1_full, w1_flex_f, w1_mx_f = quantize(w1_full, w_dtype, dev, **opt)
-    w2_full, w2_flex_f, w2_mx_f = quantize(w2_full, w_dtype, dev, **opt)
+    if rank == 0:
+        w1_full, w1_flex_f, w1_mx_f = quantize(w1_full, w_dtype, dev, **opt)
+        w2_full, w2_flex_f, w2_mx_f = quantize(w2_full, w_dtype, dev, **opt)
 
     # precision configs
     pcg = PrecisionConfig(mx_ctx=wg_mx, flex_ctx=FlexCtx(rhs_data=wg_flex))
     pcs = triton_bench.swiglu.PrecisionConfig(limit=1.0)
     pc1 = PrecisionConfig(mx_ctx=w1_mx, flex_ctx=FlexCtx(rhs_data=w1_flex))
     pc2 = PrecisionConfig(mx_ctx=w2_mx, flex_ctx=FlexCtx(rhs_data=w2_flex))
-    pc1_f = PrecisionConfig(mx_ctx=w1_mx_f, flex_ctx=FlexCtx(rhs_data=w1_flex_f))
-    pc2_f = PrecisionConfig(mx_ctx=w2_mx_f, flex_ctx=FlexCtx(rhs_data=w2_flex_f))
+    if rank == 0:
+        pc1_f = PrecisionConfig(mx_ctx=w1_mx_f, flex_ctx=FlexCtx(rhs_data=w1_flex_f))
+        pc2_f = PrecisionConfig(mx_ctx=w2_mx_f, flex_ctx=FlexCtx(rhs_data=w2_flex_f))
 
     # inputs
     dtype_map = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp8": torch.float8_e4m3fn}
