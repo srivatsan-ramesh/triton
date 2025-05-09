@@ -42,6 +42,15 @@ static void pipelineWgmma(ModuleOp moduleOp) {
   }
 }
 
+static Operation* warpInMaskOp(RewriterBase &rewriter, Operation *op, Value pred) {
+  auto mask = rewriter.create<triton::gpu::MaskOp>(op->getLoc(), op->getResultTypes(),pred);
+  rewriter.createBlock(&mask->getRegion(0));
+  rewriter.setInsertionPointToStart(&mask->getRegion(0).front());
+  auto newOp = rewriter.clone(*op);
+  rewriter.create<triton::gpu::MaskReturnOp>(op->getLoc(), newOp->getResults());
+  return mask;
+}
+
 static void expandLoops(ModuleOp moduleOp) {
   SmallVector<scf::ForOp> loops;
   moduleOp->walk([&](scf::ForOp forOp) { loops.push_back(forOp); });
@@ -56,7 +65,7 @@ static void expandLoops(ModuleOp moduleOp) {
     triton::PipeliningOption options;
     options.supportDynamicLoops = true;
     options.peelEpilogue = false;
-    options.predicateFn = triton::predicateOp;
+    options.predicateFn = warpInMaskOp;
     options.getScheduleFn =
         [&](scf::ForOp forOp,
             std::vector<std::pair<Operation *, unsigned>> &schedule) {
