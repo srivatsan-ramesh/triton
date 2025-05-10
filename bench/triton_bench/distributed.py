@@ -3,6 +3,7 @@ import torch
 import torch.distributed as dist
 import triton_bench.routing
 from triton_bench.routing import RoutingData, GatherIndx, ScatterIndx
+from triton_bench.topk import topk
 from typing import Tuple
 
 
@@ -74,21 +75,12 @@ def reduce_scatter(x: torch.Tensor, token_mask: torch.Tensor = None, dim=0):
 
 def routing(logits, n_expts_act, expt_indx=None, EP=1):
     if _is_distributed_launch():
-
-        def topk(vals, k, expt_indx):
-            # topk of experts
-            if expt_indx is None:
-                tk_idx = torch.argsort(-vals, dim=1, stable=True)[:, :k]
-            else:
-                tk_idx = expt_indx
-            tk_val = torch.take_along_dim(vals, tk_idx, dim=1)
-            return tk_val, tk_idx
-
+        assert expt_indx is None
         _, n_expts_tot = logits.shape
-        expt_scal, expt_indx = topk(logits, n_expts_act, expt_indx)
+        expt_scal, expt_indx, _ = topk(logits, n_expts_act)
         expt_scal = torch.softmax(expt_scal, dim=-1)
         # Sort each token's selections by expert
-        expt_indx, sort_indices = torch.sort(expt_indx, dim=1)
+        expt_indx, sort_indices = torch.sort(expt_indx, dim=1, stable=True)
         expt_scal = torch.gather(expt_scal, 1, sort_indices)
         # Distributed-DP
         expt_scal = all_gather(expt_scal, dim=0)

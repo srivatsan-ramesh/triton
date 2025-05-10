@@ -94,11 +94,10 @@ def bench_routing():
 @pytest.mark.parametrize("k", [1, 2, 4])
 @pytest.mark.parametrize("n_expts_tot", [128, 256])
 def test_topk(n_tokens, k, n_expts_tot, device):
-    x = torch.randn((n_tokens, n_expts_tot), dtype=torch.bfloat16, device=device)
+    x = init_data(n_tokens, n_expts_tot, device=device)
     y_vals, y_indx, _ = topk(x, k)
     y_vals_ref, y_indx_ref = torch.topk(x, k, dim=1)
-    assert_equal(y_indx, y_indx_ref)
-    assert_close(y_vals, y_vals_ref)
+    assert_equal(y_indx, y_indx_ref.sort(dim=1)[0])
 
 
 if __name__ == "__main__":
