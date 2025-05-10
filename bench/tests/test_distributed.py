@@ -178,22 +178,13 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     dev = f"cuda:{rank}"
 
     # weights & biases
-    if rank == 0:
-        wg = torch.randn((dim1, n_expts_tot), device=dev)
-    else:
-        wg = torch.empty((dim1, n_expts_tot), device=dev)
+    wg = torch.randn((dim1, n_expts_tot), device=dev)
     dist.broadcast(wg, src=0)
 
-    if rank == 0:
-        bg = torch.randn((n_expts_tot, ), device=dev)
-    else:
-        bg = torch.empty((n_expts_tot, ), device=dev)
+    bg = torch.randn((n_expts_tot, ), device=dev)
     dist.broadcast(bg, src=0)
 
-    if rank == 0:
-        b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
-    else:
-        b2 = torch.empty((n_expts_tot // EP, dim1), device=dev)
+    b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
     dist.broadcast(b2, src=0)
 
     w1 = torch.randn((n_expts_tot // EP, dim1, dim2 // TP), device=dev)
