@@ -73,7 +73,7 @@ def reduce_scatter(x: torch.Tensor, token_mask: torch.Tensor = None, dim=0):
         return x
 
 
-def routing(logits, n_expts_act, expt_indx=None, EP=1):
+def routing(logits, n_expts_act, expt_indx=None, EP=1, TP=1):
     if _is_distributed_launch():
         assert expt_indx is None
         _, n_expts_tot = logits.shape
@@ -89,7 +89,7 @@ def routing(logits, n_expts_act, expt_indx=None, EP=1):
         expt_scal = all_gather(expt_scal, dim=0)
         expt_indx = all_gather(expt_indx, dim=0)
         chunk = n_expts_tot // EP
-        ep_indx = dist.get_rank() // EP
+        ep_indx = dist.get_rank() // TP
         # Distributed-EP
         if EP > 1:
             # keep only the experts assigned to this rank
