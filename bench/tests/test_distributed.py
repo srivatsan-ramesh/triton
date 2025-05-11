@@ -188,9 +188,9 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
 
     b2 = torch.randn((n_expts_tot // EP, dim1), device=dev)
     b2_list = list(b2.chunk(EP, dim=0))
-    for i in range(EP):
-        group = dist.new_group(list(range(i * TP, (i + 1) * TP)))
-        dist.broadcast(b2_list[i], src=0, group=group)
+    for e in range(EP):
+        group = dist.new_group(list(range(e * TP, (e + 1) * TP)))
+        dist.broadcast(b2_list[e], src=0, group=group)
 
     w1 = torch.randn((n_expts_tot // EP, dim1, dim2 // TP), device=dev)
     w2 = torch.randn((n_expts_tot // EP, dim2 // TP // 2, dim1), device=dev)
