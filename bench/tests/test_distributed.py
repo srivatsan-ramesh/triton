@@ -171,6 +171,27 @@ def quantize(w, dtype, dev, **opt):
                             actual_weight_scale_shape=weight_scale_shape),
         )
 
+def gather_ep(rank, world_size, TP, EP, b2):
+    if rank % TP == 0:
+        gathered = []
+        if rank == 0:
+            gathered = [torch.zeros_like(b2) for _ in range(EP)]
+        group = dist.new_group(list(range(0, world_size, TP)))
+        dist.gather(b2, gathered, dst=0, group=group)
+        if rank == 0:
+            b2_full = torch.cat(gathered, dim=0)
+    return b2_full
+
+def gather_full(rank, world_size, param, TP, EP, concat_dim_inside, concat_dim_outside):
+    gathered = []
+    if rank == 0:
+        gathered = [torch.zeros_like(param) for _ in range(world_size)]
+    dist.gather(param, gathered, dst=0)
+    if rank == 0:
+        rows = [torch.cat(gathered[e * TP:(e + 1) * TP], dim=concat_dim_inside) for e in range(EP)]
+        return torch.cat(rows, dim=concat_dim_outside)
+    return None
+
 
 def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP):
     # We compare the distributed and single-GPU versions of the model to verify correctness.
@@ -190,32 +211,15 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     ep_indx = rank // TP
     group = dist.new_group(list(range(ep_indx * TP, (ep_indx + 1) * TP)))
     dist.broadcast(b2, src=ep_indx * TP, group=group)
-    if rank % TP == 0:
-        gathered = []
-        if rank == 0:
-            gathered = [torch.zeros_like(b2) for _ in range(EP)]
-        group = dist.new_group(list(range(0, world_size, TP)))
-        dist.gather(b2, gathered, dst=0, group=group)
-        if rank == 0:
-            b2_full = torch.cat(gathered, dim=0)
 
     w1 = torch.randn((n_expts_tot // EP, dim1, dim2 // TP), device=dev)
     w2 = torch.randn((n_expts_tot // EP, dim2 // TP // 2, dim1), device=dev)
     b1 = torch.randn((n_expts_tot // EP, dim2 // TP), device=dev)
 
-    def gather_full(param, TP, EP, concat_dim_inside, concat_dim_outside):
-        gathered = []
-        if rank == 0:
-            gathered = [torch.zeros_like(param) for _ in range(world_size)]
-        dist.gather(param, gathered, dst=0)
-        if rank == 0:
-            rows = [torch.cat(gathered[e * TP:(e + 1) * TP], dim=concat_dim_inside) for e in range(EP)]
-            return torch.cat(rows, dim=concat_dim_outside)
-        return None
-
-    w1_full = gather_full(w1, TP, EP, concat_dim_inside=2, concat_dim_outside=0)
-    w2_full = gather_full(w2, TP, EP, concat_dim_inside=1, concat_dim_outside=0)
-    b1_full = gather_full(b1, TP, EP, concat_dim_inside=1, concat_dim_outside=0)
+    w1_full = gather_full(rank, world_size, w1, TP, EP, concat_dim_inside=2, concat_dim_outside=0)
+    w2_full = gather_full(rank, world_size, w2, TP, EP, concat_dim_inside=1, concat_dim_outside=0)
+    b1_full = gather_full(rank, world_size, b1, TP, EP, concat_dim_inside=1, concat_dim_outside=0)
+    b2_full = gather_ep(rank, world_size, TP, EP, b2)
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
