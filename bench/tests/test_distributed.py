@@ -286,6 +286,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
         (1024, 512, 512, 128, 2, "bf16", "bf16", 1, 1),
         (1024, 512, 512, 128, 2, "bf16", "bf16", 4, 1),
         (1024, 512, 512, 128, 2, "bf16", "bf16", 1, 4),
+        (1024, 512, 512, 128, 2, "bf16", "bf16", 2, 2),
     ],
 )
 def test_mlp_mp(batch, dim1, dim2, n_expts_tot, n_expts_act, x_dtype, w_dtype, TP, EP, monkeypatch):
