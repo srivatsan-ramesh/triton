@@ -171,16 +171,19 @@ def quantize(w, dtype, dev, **opt):
                             actual_weight_scale_shape=weight_scale_shape),
         )
 
-def gather_ep(rank, world_size, TP, EP, b2):
+
+def gather_ep(rank, world_size, param, TP, EP):
+    gathered = None
     if rank % TP == 0:
         gathered = []
         if rank == 0:
-            gathered = [torch.zeros_like(b2) for _ in range(EP)]
+            gathered = [torch.zeros_like(param) for _ in range(EP)]
         group = dist.new_group(list(range(0, world_size, TP)))
-        dist.gather(b2, gathered, dst=0, group=group)
+        dist.gather(param, gathered, dst=0, group=group)
         if rank == 0:
-            b2_full = torch.cat(gathered, dim=0)
-    return b2_full
+            gathered = torch.cat(gathered, dim=0)
+    return gathered
+
 
 def gather_full(rank, world_size, param, TP, EP, concat_dim_inside, concat_dim_outside):
     gathered = []
@@ -219,7 +222,7 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     w1_full = gather_full(rank, world_size, w1, TP, EP, concat_dim_inside=2, concat_dim_outside=0)
     w2_full = gather_full(rank, world_size, w2, TP, EP, concat_dim_inside=1, concat_dim_outside=0)
     b1_full = gather_full(rank, world_size, b1, TP, EP, concat_dim_inside=1, concat_dim_outside=0)
-    b2_full = gather_ep(rank, world_size, TP, EP, b2)
+    b2_full = gather_ep(rank, world_size, b2, TP, EP)
 
     # quantization
     swizzle_opt = {"mx4": {"swizzle_mx_scale": True}}
@@ -230,6 +233,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     if rank == 0:
         w1_full, w1_flex_f, w1_mx_f = quantize(w1_full, w_dtype, dev, **opt)
         w2_full, w2_flex_f, w2_mx_f = quantize(w2_full, w_dtype, dev, **opt)
+    else:
+        w1_full = w2_full = w1_flex_f = w2_flex_f = w1_mx_f = w2_mx_f = None
 
     # precision configs
     pcg = PrecisionConfig(mx_ctx=wg_mx, flex_ctx=FlexCtx(rhs_data=wg_flex))
@@ -239,6 +244,8 @@ def distributed_run(rank, world_size, batch, dim1, dim2, n_expts_tot, n_expts_ac
     if rank == 0:
         pc1_f = PrecisionConfig(mx_ctx=w1_mx_f, flex_ctx=FlexCtx(rhs_data=w1_flex_f))
         pc2_f = PrecisionConfig(mx_ctx=w2_mx_f, flex_ctx=FlexCtx(rhs_data=w2_flex_f))
+    else:
+        pc1_f = pc2_f = None
 
     # inputs
     dtype_map = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp8": torch.float8_e4m3fn}
