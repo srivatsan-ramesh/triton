@@ -318,11 +318,12 @@ struct SegmentBaseOpConversion
   matchAndRewrite(mlir::triton::proton::gpu::SegmentBaseOp op,
                   OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-
     auto mod = op.getOperation()->getParentOfType<ModuleOp>();
     auto loc = op.getLoc();
     auto b = TritonLLVMOpBuilder(loc, rewriter);
     int numWarps = mlir::triton::gpu::lookupNumWarps(mod);
+    assert(llvm::isPowerOf2_32(numWarps) &&
+           "numWarps must be power of 2 for now");
     auto granularity = op.getGranularity();
     auto selectIdsAttr = op.getSelectIdsAttr();
 
@@ -350,41 +351,48 @@ struct SegmentBaseOpConversion
         mlir::ShapedType::getNumElements(bufferTy.getShape()) *
         bufferTy.getElementType().getIntOrFloatBitWidth() / 8;
 
-    auto defaultSegmentBaseFunc = [&](int bufferSize) -> Value {
-      const int segmentWordSize = bufferSize / selectedIds.size() / 4;
-      int warpSegmentBase = 0;
-
-      Value segmentBase = b.i32_val(-1);
-      for (int warpId : selectedIds) {
-        segmentBase = b.select(b.icmp_eq(curWarpId, b.i32_val(warpId)),
-                               b.i32_val(warpSegmentBase), segmentBase);
-        warpSegmentBase += segmentWordSize;
-      }
-      return segmentBase;
-    };
-
-    auto allWarpSegmentBaseFunc = [&](int bufferSize) -> Value {
-      const int segmentWordSize = bufferSize / numWarps / 4;
-      // TODO(fywkevin): assert segmentWordSize and numWarps power of 2
-      Value segmentBase = b.mul(curWarpId, b.i32_val(segmentWordSize));
-      return segmentBase;
-    };
-
     // Specialize the segment base address calculation might bring a few cycles
     // saving per record measurement overhead.
-    Value res;
+    Value segmentBase;
     if (isAllIds) {
       if (granularity == proton::gpu::Granularity::WARP)
-        res = allWarpSegmentBaseFunc(bufferSizeInBytes);
+        segmentBase = getAllWarpSegmentBase(rewriter, loc, curWarpId, bufferSizeInBytes,
+                                    numWarps, b);
       else
         llvm::report_fatal_error(
             "segment address specialization not implemented yet");
     } else {
-      res = defaultSegmentBaseFunc(bufferSizeInBytes);
+      segmentBase = getDefaultSegmentBase(
+          rewriter, loc, selectedIds, curWarpId, bufferSizeInBytes, b);
     }
 
-    rewriter.replaceOp(op, res);
+    rewriter.replaceOp(op, segmentBase);
     return success();
+  }
+
+private:
+  Value getAllWarpSegmentBase(ConversionPatternRewriter &rewriter, Location loc,
+                              Value curWarpId, size_t bufferSize,
+                              size_t numWarps, TritonLLVMOpBuilder &b) const {
+    const int segmentWordSize = bufferSize / numWarps / 4;
+    return b.mul(curWarpId, b.i32_val(segmentWordSize));
+  };
+
+  Value getDefaultSegmentBase(ConversionPatternRewriter &rewriter, Location loc,
+                              ArrayRef<int> selectedIds,
+                              Value curWarpId, size_t bufferSize,
+                              TritonLLVMOpBuilder &b,
+                              Value &segmentBase) const {
+    const int segmentWordSize = bufferSize / selectedIds.size() / 4;
+    int warpSegmentBase = 0;
+
+    segmentBase = b.i32_val(-1);
+    for (int warpId : selectedIds) {
+      segmentBase = b.select(b.icmp_eq(curWarpId, b.i32_val(warpId)),
+                             b.i32_val(warpSegmentBase), segmentBase);
+      warpSegmentBase += segmentWordSize;
+    }
+    return segmentBase;
   }
 
 protected:
@@ -455,26 +463,31 @@ protected:
   const proton::gpu::TargetInfoBase &targetInfo;
 };
 
-Type convertProtonGPUMemDescType(triton::gpu::MemDescType type,
-                                 const TargetInfoBase &targetInfo) {
+Type convertProtonGPUSegmentType(SegmentType type, const TargetInfoBase &targetInfo) {
   auto ctx = type.getContext();
-  // base ptr
-  auto ptrType = LLVM::LLVMPointerType::get(
-      ctx, targetInfo.getAddressSpace(type.getMemorySpace()));
-
   SmallVector<Type, 4> types;
+  // ------------
+  // Memory descriptor
+  // ------------
+  auto memDesc = type.getMemDesc();
+  auto ptrType = LLVM::LLVMPointerType::get(
+      ctx, targetInfo.getAddressSpace(memDesc.getMemorySpace()));
   types.push_back(ptrType);
-  auto rank = type.getRank();
-  // offsets
+  auto rank = memDesc.getRank();
   for (auto i = 0; i < rank; i++) {
     types.push_back(IntegerType::get(ctx, 32));
   }
-
+  // ------------
+  // Segment base
+  // ------------
+  auto segmentBaseType = IntegerType::get(type.getContext(), 32);
+  types.push_back(segmentBaseType);
+  // ------------
+  // Index ptr
+  // ------------
+  auto indexPtrType = LLVM::LLVMPointerType::get( ctx, IndexPtrAddrSpace);
+  types.push_back(indexPtrType);
   return LLVM::LLVMStructType::getLiteral(ctx, types);
-}
-
-Type convertProtonGPUSegmentBaseType(SegmentBaseType type) {
-  return IntegerType::get(type.getContext(), 32);
 }
 
 } // namespace
@@ -495,12 +508,8 @@ void populateProtonGPUOpPatterns(LLVMTypeConverter &typeConverter,
 void populateTypeConversions(LLVMTypeConverter &typeConverter,
                              const TargetInfoBase &targetInfo) {
   typeConverter.addConversion(
-      [&](triton::gpu::MemDescType type) -> std::optional<Type> {
-        return convertProtonGPUMemDescType(type, targetInfo);
-      });
-  typeConverter.addConversion(
-      [&](proton::gpu::SegmentBaseType type) -> std::optional<Type> {
-        return convertProtonGPUSegmentBaseType(type);
+      [&](proton::gpu::SegmentType type) -> std::optional<Type> {
+        return convertProtonGPUSegmentType(type);
       });
 }
 

@@ -252,7 +252,7 @@ public:
     Value index = builder.create<proton::gpu::InitBufferIndexOp>(loc, ptrTy);
 
     Value segmentBase = builder.create<proton::gpu::SegmentBaseOp>(
-        loc, proton::gpu::SegmentBaseType::get(context), buffer, granularity,
+        loc, proton::gpu::SegmentType::get(context), buffer, granularity,
         builder.getDenseI32ArrayAttr(selectIdVec));
 
     mlir::RewritePatternSet patterns(context);

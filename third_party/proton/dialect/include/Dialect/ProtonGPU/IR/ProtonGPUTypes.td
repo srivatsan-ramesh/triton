@@ -10,14 +10,20 @@ class PTG_TypeDef<string name, string _mnemonic, list<Trait> traits = []>
     let mnemonic = _mnemonic;
 }
 
-def PTG_SegmentBase : PTG_TypeDef<"SegmentBase", "seg", []> {
-  let summary = "location of a segment in the profiling buffer";
+def PTG_SegmentType : PTG_TypeDef<"Segment", "seg", []> {
+  let summary = "A segment in the internal buffer";
+
   let description = [{
-    `proton_gpu.segbase` is a type returned by `PTG_SegmentBaseOp`.
+    `proton_gpu.segment` is a type returned by `PTG_SegmentBaseOp`.
     It is used to represent the location of a segment in the profiling buffer
     that we store our profiling events into. It is lowered to `i32` type. Here,
     `-1` means the segment location is invalid.
   }];
+
+  let parameters = (ins
+    GranularityAttr:$granularity,
+    DenseI32ArrayAttr:$selectIds
+  );
 }
 
 #endif

@@ -45,10 +45,8 @@ def PTG_CircularStoreOp : PTG_Op<"circular_store", [
   }];
 
   let arguments = (ins
-    TTG_MemDescType:$data,
-    TT_Ptr:$indexPtr,
+    PTG_SegmentType:$seg,
     I32:$counter,
-    PTG_SegmentBase:$seg,
     UnitAttr:$isStart,
     I32Attr:$scopeId
   );
@@ -96,29 +94,13 @@ def PTG_FinalizeOp : PTG_Op<"finalize", [
   }];
 
   let arguments = (ins
-    TTG_MemDescType:$data,
-    TT_Ptr:$indexPtr,
+    PTG_SegmentType:$segment,
     TT_Ptr:$scratchPtr
   );
 
   let assemblyFormat = [{
     $data `,` $indexPtr `,` $scratchPtr attr-dict `:` qualified(type($data)) `,` type($indexPtr) `,` type($scratchPtr)
   }];
-}
-
-def PTG_InitBufferIndexOp : PTG_Op<"init_buffer_index", []> {
-  let summary = "Initialize the internal buffer index";
-
-  let description = [{
-    Zero-initialize the internal buffer index.
-    The index is stored at the address of `indexPtr`.
-  }];
-
-  let arguments = (ins);
-
-  let results = (outs TT_Ptr:$indexPtr);
-
-  let assemblyFormat = "attr-dict `:` type($indexPtr)";
 }
 
 def PTG_GlobalScratchAllocOp : PTG_Op<"global_scratch_alloc", [
@@ -163,11 +145,11 @@ def PTG_SegmentBaseOp : PTG_Op<"segment_base", [Pure]> {
     OptionalAttr<DenseI32ArrayAttr>:$selectIds
   );
 
-  let results = (outs PTG_SegmentBase:$segBaseOffset);
+  let results = (outs PTG_SegmentType:$seg);
 
   let hasVerifier = 1;
 
-  let assemblyFormat = "$data `,` attr-dict `:` qualified(type($data)) `->` type($segBaseOffset)";
+  let assemblyFormat = "$data `,` attr-dict `:` qualified(type($data)) `->` type($seg)";
 }
 
 def PTG_StackAllocOp : PTG_Op<"stack_alloc", [
