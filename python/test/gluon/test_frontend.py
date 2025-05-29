@@ -37,7 +37,7 @@ module attributes {"ttg.num-warps" = 4 : i32} {
 def shared_memory_kernel(XBLOCK: ttgl.constexpr, YBLOCK: ttgl.constexpr, layout_a: ttgl.constexpr,
                          layout_b: ttgl.constexpr, smem_layout: ttgl.constexpr):
     a = ttgl.full([XBLOCK, YBLOCK], 0, ttgl.int32, layout_a)
-    mem = ttgl.allocate_shared(ttgl.int32, a.shape, smem_layout, a)
+    mem = ttgl.allocate_shared_memory(ttgl.int32, a.shape, smem_layout, a)
     b = mem.load(layout_b)  # noqa: F841
     mem.store(a)
 
@@ -75,7 +75,7 @@ def tensor_memory_kernel(layout: ttgl.constexpr, tmem_layout: ttgl.constexpr):
     XBLOCK: ttgl.constexpr = tmem_layout.block[0]
     YBLOCK: ttgl.constexpr = tmem_layout.block[1]
     a = ttgl.full([XBLOCK, YBLOCK], 0, ttgl.int32, layout)
-    mem = ttgl.nvidia.blackwell.allocate_tensor(ttgl.int32, a.shape, tmem_layout, a)
+    mem = ttgl.nvidia.blackwell.allocate_tensor_memory(ttgl.int32, a.shape, tmem_layout, a)
     b = mem.load(layout)  # noqa: F841
     mem.store(a)
     slice1 = mem.subslice(0, YBLOCK // 2)  # noqa: F841

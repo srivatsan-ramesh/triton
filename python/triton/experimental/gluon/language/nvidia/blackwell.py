@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from triton._C.libtriton.gluon_ir import GluonOpBuilder
     from triton._C.libtriton import gluon_ir as ir
 
+__all__ = ["TensorMemoryLayout", "tensor_memory_descriptor", "allocate_tensor_memory"]
+
 
 @dataclass(frozen=True, eq=True)
 class TensorMemoryLayout:
@@ -114,7 +116,7 @@ class tensor_memory_descriptor(base_value):
 
 
 @builtin
-def allocate_tensor(element_ty, shape, layout, value=None, _builder=None):
+def allocate_tensor_memory(element_ty, shape, layout, value=None, _builder=None):
     element_ty = _unwrap_if_constexpr(element_ty)
     shape = _unwrap_if_constexpr(shape)
     layout = _unwrap_if_constexpr(layout)

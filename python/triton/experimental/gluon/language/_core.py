@@ -81,7 +81,7 @@ __all__ = [
     "arange",
     "full",
     "convert_layout",
-    "allocate_shared",
+    "allocate_shared_memory",
     "shared_memory_descriptor",
     *_IMPORT_FROM_TRITON,
 ]
@@ -229,7 +229,7 @@ def full(shape, value, dtype, layout, _builder=None):
 
 
 @builtin
-def allocate_shared(element_ty, shape, layout, value=None, _builder=None):
+def allocate_shared_memory(element_ty, shape, layout, value=None, _builder=None):
     element_ty = _unwrap_if_constexpr(element_ty)
     shape = _unwrap_if_constexpr(shape)
     layout = _unwrap_if_constexpr(layout)
