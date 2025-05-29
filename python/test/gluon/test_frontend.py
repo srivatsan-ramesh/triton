@@ -1,8 +1,11 @@
 import expecttest
+import torch
+import pytest
 
 from triton import knobs
 from triton.experimental import gluon
 from triton.experimental.gluon import language as ttgl
+from triton._internal_testing import is_cuda
 
 
 @gluon.jit
@@ -82,6 +85,8 @@ def tensor_memory_kernel(layout: ttgl.constexpr, tmem_layout: ttgl.constexpr):
     slice2 = mem.subslice(YBLOCK // 2, YBLOCK // 2)  # noqa: F841
 
 
+@pytest.mark.skipif(not is_cuda() or torch.cuda.get_device_capability()[0] != 10,
+                    reason="Requires blackwell tensor cores")
 def test_tensor_memory(fresh_knobs):
     knobs.compilation.disable_line_info = True
 
