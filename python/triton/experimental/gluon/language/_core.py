@@ -41,6 +41,13 @@ from triton.language.core import (
 )
 from . import _semantic as semantic
 
+_IMPORT_FROM_TRITON: List[str] = [
+    "program_id",  # NOQA: F822
+    "load",  # NOQA: F822
+    "store",  # NOQA: F822
+    "to_tensor",  # NOQA: F822
+]
+
 __all__ = [
     "constexpr",
     "base_value",
@@ -71,14 +78,12 @@ __all__ = [
     "float64",
     "_unwrap_if_constexpr",
     "tensor",
-    "program_id",  # NOQA: F822
-    "load",  # NOQA: F822
-    "store",  # NOQA: F822
     "arange",
     "full",
     "convert_layout",
     "allocate_shared",
     "shared_memory_descriptor",
+    *_IMPORT_FROM_TRITON,
 ]
 
 T = TypeVar("T")
@@ -195,11 +200,7 @@ class shared_memory_descriptor(base_value):
         return semantic.shared_store(self, value, _builder)
 
 
-for name in [
-        "program_id",
-        "load",
-        "store",
-]:
+for name in _IMPORT_FROM_TRITON:
     fn = getattr(tl_core, name)
     globals()[name] = builtin(fn)
 
