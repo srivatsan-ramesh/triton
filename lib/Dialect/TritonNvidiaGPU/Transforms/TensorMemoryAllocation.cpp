@@ -315,9 +315,7 @@ class TritonTensorMemoryAllocationPass
           TritonTensorMemoryAllocationPass> {
 public:
   IntegerAttr getI32Attr(int32_t value) {
-    auto ctx = &getContext();
-    auto i32Ty = mlir::IntegerType::get(ctx, 32);
-    return mlir::IntegerAttr::get(i32Ty, value);
+    return Builder(&getContext()).getI32IntegerAttr(value);
   }
 
   void runOnOperation() override {
