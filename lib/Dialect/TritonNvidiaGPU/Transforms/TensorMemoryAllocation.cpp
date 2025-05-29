@@ -314,6 +314,12 @@ class TritonTensorMemoryAllocationPass
     : public impl::TritonTensorMemoryAllocationPassBase<
           TritonTensorMemoryAllocationPass> {
 public:
+  IntegerAttr getI32Attr(int32_t value) {
+    auto ctx = &getContext();
+    auto i32Ty = mlir::IntegerType::get(ctx, 32);
+    return mlir::IntegerAttr::get(i32Ty, value);
+  }
+
   void runOnOperation() override {
     ModuleOp mod = getOperation();
     MLIRContext *ctx = &getContext();
@@ -323,6 +329,9 @@ public:
     int totalMemorySize = allocateTMem(mod, offsets);
 
     std::array<int, 6> possibleAllocations = {0, 32, 64, 128, 256, 512};
+    // NOTE: if totalMemorySize > 512 we exceeded the maximum amount of tensor
+    // memory, but we let the compilation finish so that we can raise an
+    // exception in python for the auto-tuner.
     if (totalMemorySize <= 512) {
       for (int size : possibleAllocations) {
         if (totalMemorySize <= size) {
@@ -331,12 +340,18 @@ public:
         }
       }
     }
-    // if totalMemorySize > 512 we exceeded the maximum amount of tensor memory,
-    // let the compilation finish so that we can raise an exception in python
-    // for auto-tuner.
-    mod->setAttr("ttg.tensor_memory_size",
-                 mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 32),
-                                        totalMemorySize));
+    if (totalMemorySize > 0) {
+      // We use a small smem allocation to get the tensor memory base address
+      // from tcgen05.alloc, ensure the block has at least 4 bytes of smem
+      int shared = 0;
+      if (auto sharedAttr = mod->getAttr("ttg.shared")) {
+        shared = cast<IntegerAttr>(sharedAttr).getInt();
+      }
+      if (shared < 4) {
+        mod->setAttr("ttg.shared", getI32Attr(4));
+      }
+    }
+    mod->setAttr("ttg.tensor_memory_size", getI32Attr(totalMemorySize));
   }
 };
 
