@@ -4,5 +4,7 @@ add_triton_library(ProtonGPUTransforms
   DEPENDS
   ProtonGPUTransformsIncGen
   LINK_LIBS PUBLIC
+  TritonIR
+  TritonGPUIR
   ProtonGPUIR
 )

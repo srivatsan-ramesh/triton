@@ -12,4 +12,14 @@ def ScheduleBufferStorePass: Pass<"proton-schedule-buffer-store", "mlir::ModuleO
   let dependentDialects = ["gpu::ProtonGPUDialect"];
 }
 
+def SyncWarpGroupDotPass: Pass<"sync-warp-group-dot", "mlir::ModuleOp"> {
+  let summary = "Pass to sync warp group dot operations";
+  let description = "This pass makes the warp group dot operations synchronouse "
+                    "by making the wait operation to wait for the previous warp group "
+                    "dot operation to finish.";
+
+  let dependentDialects = ["mlir::triton::gpu::TritonGPUDialect",
+                           "mlir::triton::TritonDialect"];
+}
+
 #endif  // PROTONGPU_TRANSFORMS_PASSES
