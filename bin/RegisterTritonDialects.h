@@ -8,6 +8,7 @@
 #include "proton/dialect/include/Conversion/ProtonGPUToLLVM/ProtonNvidiaGPUToLLVM/Passes.h"
 #include "proton/dialect/include/Conversion/ProtonToProtonGPU/Passes.h"
 #include "proton/dialect/include/Dialect/Proton/IR/Dialect.h"
+#include "proton/dialect/include/Dialect/Proton/Transforms/Passes.h"
 #include "proton/dialect/include/Dialect/ProtonGPU/IR/Dialect.h"
 #include "proton/dialect/include/Dialect/ProtonGPU/Transforms/Passes.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
@@ -102,6 +103,7 @@ inline void registerTritonDialects(mlir::DialectRegistry &registry) {
   // Proton passes
   mlir::test::proton::registerTestScopeIdAllocationPass();
   mlir::triton::proton::registerConvertProtonToProtonGPU();
+  mlir::triton::proton::registerInsertProtonRecordAsyncOpsPass();
   mlir::triton::proton::gpu::registerConvertProtonNvidiaGPUToLLVM();
   mlir::triton::proton::gpu::registerConvertProtonAMDGPUToLLVM();
   mlir::triton::proton::gpu::registerAllocateProtonSharedMemoryPass();

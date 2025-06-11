@@ -1,5 +1,5 @@
 add_triton_library(ProtonGPUTransforms
-  ProtonGPUTransformsPass.cpp
+  ScheduleBufferStore.cpp
 
   DEPENDS
   ProtonGPUTransformsIncGen

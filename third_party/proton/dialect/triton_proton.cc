@@ -4,6 +4,7 @@
 #include "Conversion/ProtonGPUToLLVM/ProtonNvidiaGPUToLLVM/Passes.h"
 #include "Conversion/ProtonToProtonGPU/Passes.h"
 #include "Dialect/Proton/IR/Dialect.h"
+#include "Dialect/Proton/Transforms/Passes.h"
 #include "Dialect/ProtonGPU/IR/Dialect.h"
 #include "Dialect/ProtonGPU/Transforms/Passes.h"
 #include "mlir/IR/Builders.h"
@@ -95,6 +96,9 @@ void init_triton_proton(py::module &&m) {
               bufferStrategy, bufferType, bufferSize, maxSharedMemSize,
               profileScratchSize, profileScratchAlignment));
         });
+
+  ADD_PASS_WRAPPER_0("add_insert_proton_record_async_ops_pass",
+                     proton::createInsertProtonRecordAsyncOpsPass);
 
   ADD_PASS_WRAPPER_0("add_convert_proton_nvidia_gpu_to_llvm",
                      proton::gpu::createConvertProtonNvidiaGPUToLLVMPass);

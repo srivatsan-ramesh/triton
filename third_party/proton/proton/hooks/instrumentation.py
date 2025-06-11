@@ -160,6 +160,7 @@ class InstrumentationHook(Hook):
         backend_name = _get_backend_name()
 
         def to_llvmir_passes(pm):
+            triton_proton.add_insert_proton_record_async_ops_pass(pm)
             triton_proton.add_convert_proton_to_protongpu(pm, self.mode.metric_type, self.mode.sampling_strategy,
                                                           self.mode.sampling_options, self.mode.granularity,
                                                           self.mode.buffer_strategy, self.mode.buffer_type,
