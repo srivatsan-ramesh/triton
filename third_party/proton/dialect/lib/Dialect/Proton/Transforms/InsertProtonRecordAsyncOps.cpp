@@ -1,17 +1,20 @@
-#include "Dialect/Proton/Transforms/Passes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "proton/dialect/include/Dialect/Proton/Transforms/Passes.h"
 
-#include "Dialect/Proton/IR/Dialect.h"
+#include "proton/dialect/include/Dialect/Proton/IR/Dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
+#include "triton/Dialect/TritonNvidiaGPU/IR/Dialect.h"
 
 namespace mlir::triton::proton {
 
 #define GEN_PASS_DEF_INSERTPROTONRECORDASYNCOPSPASS
-#include "Dialect/Proton/Transforms/Passes.h.inc"
+#include "proton/dialect/include/Dialect/Proton/Transforms/Passes.h.inc"
 
 struct InsertProtonRecordAsyncOpsPass
     : public impl::InsertProtonRecordAsyncOpsPassBase<
@@ -22,7 +25,32 @@ struct InsertProtonRecordAsyncOpsPass
 
   void runOnOperation() override {
     ModuleOp m = getOperation();
-    m.dump();
+    MLIRContext *context = m.getContext();
+    OpBuilder builder(context);
+    int i = 0;
+
+    // Walk through all functions in the module
+    m.walk([&](triton::FuncOp funcOp) {
+      // Walk through all WarpGroupDotWaitOp operations in the function
+      funcOp.walk([&](triton::LoadOp loadOp) {
+        // Create a unique name for this record operation
+        std::string opName = "load_" + std::to_string(i++);
+
+        // Insert start record before the wait operation
+        builder.setInsertionPoint(loadOp);
+        builder.create<mlir::triton::proton::RecordOp>(
+            loadOp.getLoc(),
+            /*isStart=*/builder.getUnitAttr(),
+            /*name=*/builder.getStringAttr(opName));
+
+        // Insert end record after the wait operation
+        builder.setInsertionPointAfter(loadOp);
+        builder.create<mlir::triton::proton::RecordOp>(
+            loadOp.getLoc(),
+            /*isStart=*/nullptr,
+            /*name=*/builder.getStringAttr(opName));
+      });
+    });
   }
 };
 
