@@ -111,8 +111,9 @@ struct InsertProtonRecordAsyncOpsPass
   void runOnOperation() override {
     ModuleOp m = getOperation();
 
-    // Insert RecordOp around LoadOp operations
-    insertRecordAroundOpType<triton::LoadOp>(m);
+    // Insert RecordOp around WarpGroupDotOp and WarpGroupDotWaitOp operations
+    insertRecordAroundOpType<triton::nvidia_gpu::WarpGroupDotOp>(m);
+    insertRecordAroundOpType<triton::nvidia_gpu::WarpGroupDotWaitOp>(m);
 
     // Insert RecordOp at the start and end of all functions
     insertRecordAroundAllFunctions(m);
