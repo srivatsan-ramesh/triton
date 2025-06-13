@@ -111,12 +111,16 @@ struct InsertProtonRecordAsyncOpsPass
   void runOnOperation() override {
     ModuleOp m = getOperation();
 
+    // Insert RecordOp at the start and end of all functions
+    insertRecordAroundAllFunctions(m);
+
     // Insert RecordOp around WarpGroupDotOp and WarpGroupDotWaitOp operations
     insertRecordAroundOpType<triton::nvidia_gpu::WarpGroupDotOp>(m);
     insertRecordAroundOpType<triton::nvidia_gpu::WarpGroupDotWaitOp>(m);
 
-    // Insert RecordOp at the start and end of all functions
-    insertRecordAroundAllFunctions(m);
+    // Insert RecordOp around AsyncCopyGlobalToLocalOp and AsyncWaitOp
+    insertRecordAroundOpType<triton::gpu::AsyncCopyGlobalToLocalOp>(m);
+    insertRecordAroundOpType<triton::gpu::AsyncWaitOp>(m);
   }
 };
 
