@@ -40,14 +40,14 @@ struct InsertProtonRecordAsyncOpsPass
         builder.setInsertionPoint(loadOp);
         builder.create<mlir::triton::proton::RecordOp>(
             loadOp.getLoc(),
-            /*isStart=*/builder.getUnitAttr(),
+            /*isStart=*/true,
             /*name=*/builder.getStringAttr(opName));
 
         // Insert end record after the wait operation
         builder.setInsertionPointAfter(loadOp);
         builder.create<mlir::triton::proton::RecordOp>(
             loadOp.getLoc(),
-            /*isStart=*/nullptr,
+            /*isStart=*/false,
             /*name=*/builder.getStringAttr(opName));
       });
     });

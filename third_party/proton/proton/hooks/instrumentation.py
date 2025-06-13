@@ -250,6 +250,11 @@ class InstrumentationHook(Hook):
             module = triton_ir.parse_mlir_module(ir_path, context)
             module.context = context
 
+            pm = triton_ir.pass_manager(module.context)
+            pm.enable_debug()
+            triton_proton.add_insert_proton_record_async_ops_pass(pm)
+            pm.run(module)
+
             scope_id_names = triton_proton.get_scope_id_names(module)
             scope_id_parents = triton_proton.get_scope_id_parents(module)
             libproton.init_function_metadata(function, name, scope_id_names, scope_id_parents, metadata_path)
